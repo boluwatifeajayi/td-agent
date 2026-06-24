@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TD Agent — {{ repo_name }}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --primary: #6366f1;
+  --primary-dark: #4f46e5;
+  --ai-color: #818cf8;
+  --sonar-color: #34d399;
+  --danger: #f87171;
+  --bg: #0f172a;
+  --card: #1e293b;
+  --card2: #162032;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 4rem;
+}
+nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .9rem 2rem; border-bottom: 1px solid var(--border);
+  background: rgba(15,23,42,.8); backdrop-filter: blur(8px);
+  position: sticky; top: 0; z-index: 10;
+}
+.nav-brand { font-weight: 700; font-size: 1.15rem; color: var(--text); text-decoration: none; }
+.nav-brand span { color: var(--primary); }
+.nav-back { font-size: .85rem; color: var(--text-muted); text-decoration: none; }
+.nav-back:hover { color: var(--text); }
+
+.page-header {
+  background: linear-gradient(135deg, rgba(99,102,241,.12) 0%, transparent 60%);
+  border-bottom: 1px solid var(--border); padding: 2rem 2rem 1.5rem;
+}
+.page-header-inner { max-width: 1200px; margin: 0 auto; }
+.breadcrumb { font-size: .8rem; color: var(--text-muted); margin-bottom: .6rem; }
+.breadcrumb a { color: var(--text-muted); text-decoration: none; }
+.breadcrumb a:hover { color: var(--primary); }
+.page-title { font-size: 1.8rem; font-weight: 800; letter-spacing: -.02em; margin-bottom: 1.25rem; }
+
+.stats-bar {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem;
+}
+.stat-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.2rem;
+}
+.stat-card-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); }
+.stat-card-value { font-size: 2rem; font-weight: 800; line-height: 1.1; margin: .2rem 0 .1rem; }
+.stat-card-sub { font-size: .75rem; color: var(--text-muted); }
+.ai-color    { color: var(--ai-color); }
+.sonar-color { color: var(--sonar-color); }
+.delta-pos   { color: var(--danger); }
+.delta-neg   { color: var(--sonar-color); }
+
+.main { max-width: 1200px; margin: 2rem auto; padding: 0 2rem; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 1.25rem 1.4rem; margin-bottom: 1rem;
+}
+.card-title {
+  font-size: .8rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text-muted); margin-bottom: 1rem;
+}
+.chart-wrap    { position: relative; height: 280px; }
+.chart-wrap-sm { position: relative; height: 230px; }
+
+.tabs { display: flex; gap: .25rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+.tab-btn {
+  background: none; border: none; color: var(--text-muted); font-size: .85rem;
+  padding: .5rem .9rem; cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all .15s; font-weight: 500;
+}
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.issue-toolbar { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .75rem; }
+.filter-btn {
+  font-size: .75rem; font-weight: 600; padding: .25rem .65rem;
+  border-radius: 999px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-muted); cursor: pointer; transition: all .15s;
+}
+.filter-btn:hover { border-color: var(--primary); color: var(--primary); }
+.filter-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.issue-search {
+  flex: 1; min-width: 180px;
+  background: var(--card2); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-size: .82rem; padding: .35rem .75rem; outline: none;
+}
+.issue-search:focus { border-color: var(--primary); }
+
+table { border-collapse: collapse; width: 100%; font-size: .82rem; }
+th, td { padding: .55rem .75rem; text-align: left; border-bottom: 1px solid var(--border); }
+th {
+  color: var(--text-muted); font-size: .72rem; text-transform: uppercase;
+  letter-spacing: .05em; font-weight: 600; background: var(--card2);
+}
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: rgba(99,102,241,.05); }
+td { color: var(--text); vertical-align: top; }
+
+.min-badge {
+  display: inline-block; font-size: .72rem; font-weight: 700;
+  padding: .15rem .5rem; border-radius: 4px;
+  background: rgba(99,102,241,.2); color: var(--ai-color);
+}
+.sev-critical { color: #f87171; font-weight: 700; }
+.sev-high     { color: #fbbf24; font-weight: 700; }
+.sev-medium   { color: #60a5fa; }
+.sev-low      { color: var(--text-muted); }
+.cat-pill {
+  display: inline-block; font-size: .68rem; padding: .15rem .5rem;
+  border-radius: 4px; background: rgba(148,163,184,.12);
+  color: var(--text-muted); text-transform: capitalize;
+}
+.commit-hash { font-family: monospace; font-size: .78rem; color: var(--text-muted); }
+
+.commit-row {
+  display: flex; gap: 1rem; align-items: baseline;
+  padding: .6rem 0; border-bottom: 1px solid var(--border); font-size: .82rem;
+}
+.commit-row:last-child { border-bottom: none; }
+.commit-score-badge { flex-shrink: 0; width: 72px; text-align: right; font-weight: 700; color: var(--ai-color); }
+.commit-info { flex: 1; min-width: 0; }
+.commit-msg { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.commit-meta { color: var(--text-muted); font-size: .75rem; margin-top: .1rem; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/"><span>TD</span> Agent</a>
+  <a class="nav-back" href="/">← All repositories</a>
+</nav>
+
+<div class="page-header">
+  <div class="page-header-inner">
+    <div class="breadcrumb"><a href="/">Dashboard</a> / {{ repo_name }}</div>
+    <h1 class="page-title">{{ repo_name }}</h1>
+
+    {% set latest = rows[-1] %}
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="stat-card-label">AI Debt Score</div>
+        <div class="stat-card-value ai-color">{{ "{:,}".format(latest.ai_debt_score) }}</div>
+        <div class="stat-card-sub">remediation minutes (latest commit)</div>
+      </div>
+
+      {% if sq_summary %}
+      <div class="stat-card">
+        <div class="stat-card-label">SonarQube SQALE</div>
+        <div class="stat-card-value sonar-color">{{ "{:,}".format(sq_summary.sqale_index) }}</div>
+        <div class="stat-card-sub">remediation minutes (latest)</div>
+      </div>
+      {% if latest.ai_debt_score > 0 and sq_summary.sqale_index > 0 %}
+      <div class="stat-card">
+        <div class="stat-card-label">AI vs SonarQube</div>
+        {% set pct = ((latest.ai_debt_score - sq_summary.sqale_index) / sq_summary.sqale_index * 100) | int %}
+        <div class="stat-card-value {% if pct > 0 %}delta-pos{% else %}delta-neg{% endif %}">
+          {% if pct > 0 %}+{% endif %}{{ pct }}%
+        </div>
+        <div class="stat-card-sub">{% if pct > 0 %}AI detects more debt{% else %}SonarQube detects more{% endif %}</div>
+      </div>
+      {% endif %}
+      {% endif %}
+
+      <div class="stat-card">
+        <div class="stat-card-label">Commits analyzed</div>
+        <div class="stat-card-value" style="color:var(--text)">{{ rows|length }}</div>
+        <div class="stat-card-sub">across commit history</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Total issues</div>
+        <div class="stat-card-value" style="color:var(--text)">{{ all_issues|length }}</div>
+        <div class="stat-card-sub">across all analyzed commits</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('overview', this)">Overview</button>
+    <button class="tab-btn" onclick="showTab('issues', this)">Issues ({{ all_issues|length }})</button>
+    <button class="tab-btn" onclick="showTab('commits', this)">Commits ({{ rows|length }})</button>
+  </div>
+
+  <!-- Overview -->
+  <div id="tab-overview" class="tab-pane active">
+    <div class="card">
+      <div class="card-title">Debt Score Timeline</div>
+      <div class="chart-wrap"><canvas id="timelineChart"></canvas></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Category Breakdown — latest commit (remediation min)</div>
+        <div class="chart-wrap-sm"><canvas id="catChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Severity Distribution — latest commit</div>
+        <div class="chart-wrap-sm"><canvas id="sevChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Issues -->
+  <div id="tab-issues" class="tab-pane">
+    <div class="card">
+      <div class="card-title">All detected issues — sorted by remediation cost</div>
+      <div class="issue-toolbar">
+        <input class="issue-search" id="issueSearch" placeholder="Search description or location…" oninput="filterIssues()">
+        <button class="filter-btn active" data-cat="all" onclick="setCatFilter('all', this)">All</button>
+        {% for cat in cat_data.keys() %}
+        <button class="filter-btn" data-cat="{{ cat }}" onclick="setCatFilter('{{ cat }}', this)">{{ cat.replace('_',' ').title() }}</button>
+        {% endfor %}
+      </div>
+      <div style="overflow-x:auto">
+        <table id="issueTable">
+          <thead>
+            <tr>
+              <th style="width:130px">Category</th>
+              <th style="width:90px">Severity</th>
+              <th>Description</th>
+              <th style="width:65px">Min</th>
+              <th style="width:75px">Commit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for issue in all_issues %}
+            <tr data-cat="{{ issue.category }}">
+              <td><span class="cat-pill">{{ issue.category.replace('_',' ') }}</span></td>
+              <td><span class="sev-{{ issue.severity }}">{{ issue.severity }}</span></td>
+              <td>
+                <div>{{ issue.description }}</div>
+                {% if issue.location %}
+                <div style="font-size:.73rem;color:var(--text-muted);margin-top:.2rem">📍 {{ issue.location }}</div>
+                {% endif %}
+                {% if issue.suggestion %}
+                <div style="font-size:.73rem;color:#818cf8;margin-top:.15rem;font-style:italic">→ {{ issue.suggestion }}</div>
+                {% endif %}
+              </td>
+              <td><span class="min-badge">{{ issue.remediation_minutes }}</span></td>
+              <td><span class="commit-hash">{{ issue.commit_short_hash }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Commits -->
+  <div id="tab-commits" class="tab-pane">
+    <div class="card">
+      <div class="card-title">Commit history (oldest → newest)</div>
+      {% for r in rows %}
+      <div class="commit-row">
+        <div class="commit-score-badge">{{ "{:,}".format(r.ai_debt_score) }}</div>
+        <div class="commit-info">
+          <div class="commit-msg">{{ r.commit_message }}</div>
+          <div class="commit-meta">
+            <span class="commit-hash">{{ r.commit_short_hash }}</span>
+            &nbsp;·&nbsp; {{ r.commit_date[:10] }}
+            &nbsp;·&nbsp; {{ r.issue_count }} issue{{ 's' if r.issue_count != 1 }}
+            &nbsp;·&nbsp; {{ r.files_analyzed }} file{{ 's' if r.files_analyzed != 1 }}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<script>
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+let _activeCat = 'all';
+function setCatFilter(cat, btn) {
+  _activeCat = cat;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  filterIssues();
+}
+function filterIssues() {
+  const q = document.getElementById('issueSearch').value.toLowerCase();
+  document.querySelectorAll('#issueTable tbody tr').forEach(row => {
+    const catOk  = _activeCat === 'all' || row.dataset.cat === _activeCat;
+    const textOk = !q || row.textContent.toLowerCase().includes(q);
+    row.style.display = catOk && textOk ? '' : 'none';
+  });
+}
+
+const CAT_COLORS = [
+  '#818cf8','#34d399','#fbbf24','#f87171','#60a5fa',
+  '#a78bfa','#fb923c','#2dd4bf','#e879f9','#f9a8d4',
+];
+const SEV_COLORS = { critical:'#f87171', high:'#fbbf24', medium:'#60a5fa', low:'#94a3b8' };
+
+fetch('/api/data/{{ repo_name }}')
+  .then(r => r.json())
+  .then(buildTimeline);
+
+function buildTimeline(d) {
+  const datasets = [{
+    label: 'AI Debt Score (min)',
+    data: d.scores,
+    borderColor: '#818cf8',
+    backgroundColor: 'rgba(129,140,248,.1)',
+    fill: true, tension: 0.35, pointRadius: 4, pointHoverRadius: 7,
+  }];
+  if (d.sonar_matched && d.sonar_matched.some(v => v !== null)) {
+    datasets.push({
+      label: 'SonarQube SQALE (min)',
+      data: d.sonar_matched,
+      borderColor: '#34d399',
+      backgroundColor: 'rgba(52,211,153,.07)',
+      fill: false, tension: 0.35, pointRadius: 4, pointHoverRadius: 7,
+      spanGaps: true,
+    });
+  }
+  new Chart(document.getElementById('timelineChart').getContext('2d'), {
+    type: 'line',
+    data: { labels: d.labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 12 } } } },
+      scales: {
+        x: { ticks: { color: '#94a3b8', maxRotation: 45 }, grid: { color: '#1e293b' } },
+        y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+      }
+    }
+  });
+}
+
+(function() {
+  const raw = {{ cat_data | tojson }};
+  const labels = Object.keys(raw).map(k => k.replace(/_/g,' '));
+  const vals   = Object.values(raw);
+  const colors = labels.map((_, i) => CAT_COLORS[i % CAT_COLORS.length]);
+  new Chart(document.getElementById('catChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Remediation min', data: vals, backgroundColor: colors, borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { display: false } },
+      }
+    }
+  });
+})();
+
+(function() {
+  const raw   = {{ sev_data | tojson }};
+  const order = ['critical','high','medium','low'];
+  const labels = order.filter(k => raw[k]);
+  const vals   = labels.map(k => raw[k]);
+  const colors = labels.map(k => SEV_COLORS[k]);
+  new Chart(document.getElementById('sevChart').getContext('2d'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: vals, backgroundColor: colors, borderWidth: 2, borderColor: '#1e293b' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '65%',
+      plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 12 }, padding: 12 } } }
+    }
+  });
+})();
+</script>
+</body>
+</html>

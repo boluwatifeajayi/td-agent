@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TD Agent — AI Technical Debt Analyzer</title>
+<style>
+:root {
+  --primary: #6366f1;
+  --primary-dark: #4f46e5;
+  --ai-color: #818cf8;
+  --sonar-color: #34d399;
+  --bg: #0f172a;
+  --card: #1e293b;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh;
+}
+
+nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .9rem 2rem; border-bottom: 1px solid var(--border);
+  background: rgba(15,23,42,.8); backdrop-filter: blur(8px);
+  position: sticky; top: 0; z-index: 10;
+}
+.nav-brand { font-weight: 700; font-size: 1.15rem; color: var(--text); text-decoration: none; }
+.nav-brand span { color: var(--primary); }
+.nav-links { display: flex; gap: 1.5rem; }
+.nav-links a { color: var(--text-muted); text-decoration: none; font-size: .9rem; transition: color .2s; }
+.nav-links a:hover { color: var(--text); }
+
+.hero {
+  text-align: center;
+  padding: 5rem 2rem 4rem;
+  background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,102,241,.18) 0%, transparent 60%);
+}
+.hero-badge {
+  display: inline-block; font-size: .75rem; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--primary); background: rgba(99,102,241,.15);
+  border: 1px solid rgba(99,102,241,.3); border-radius: 999px; padding: .3rem .9rem; margin-bottom: 1.5rem;
+}
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; line-height: 1.15;
+  letter-spacing: -.03em; margin-bottom: 1.25rem;
+}
+.hero h1 em { font-style: normal; color: var(--primary); }
+.hero p {
+  font-size: 1.15rem; color: var(--text-muted); max-width: 620px;
+  margin: 0 auto 2.5rem; line-height: 1.7;
+}
+.hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: .45rem;
+  padding: .7rem 1.5rem; border-radius: 8px; font-size: .95rem;
+  font-weight: 600; text-decoration: none; transition: all .2s; cursor: pointer; border: none;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+.btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+.features {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem; max-width: 920px; margin: 0 auto 5rem; padding: 0 2rem;
+}
+.feature-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 1.25rem 1.4rem;
+}
+.feature-icon { font-size: 1.6rem; margin-bottom: .65rem; }
+.feature-card h3 { font-size: .9rem; font-weight: 600; margin-bottom: .3rem; }
+.feature-card p { font-size: .82rem; color: var(--text-muted); line-height: 1.5; }
+
+.section { max-width: 1100px; margin: 0 auto; padding: 0 2rem 4rem; }
+.section-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 1.25rem; padding-bottom: .75rem; border-bottom: 1px solid var(--border);
+}
+.section-header h2 { font-size: 1.2rem; font-weight: 700; }
+
+.repo-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;
+}
+.repo-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 1.4rem; text-decoration: none; color: inherit;
+  transition: border-color .2s, transform .15s;
+  display: flex; flex-direction: column; gap: .85rem;
+}
+.repo-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+.repo-card-header { display: flex; align-items: center; gap: .6rem; }
+.repo-icon {
+  width: 36px; height: 36px; background: rgba(99,102,241,.15); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0;
+}
+.repo-name { font-weight: 700; font-size: 1rem; }
+.repo-meta { font-size: .78rem; color: var(--text-muted); }
+.stat-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+.stat { flex: 1; min-width: 90px; }
+.stat-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+.stat-value { font-size: 1.5rem; font-weight: 800; line-height: 1.1; margin-top: .1rem; }
+.stat-value.ai    { color: var(--ai-color); }
+.stat-value.sonar { color: var(--sonar-color); }
+.stat-value.delta-pos { color: #f87171; }
+.stat-value.delta-neg { color: var(--sonar-color); }
+.badge-row { display: flex; gap: .4rem; flex-wrap: wrap; }
+.badge {
+  font-size: .72rem; font-weight: 600; padding: .2rem .6rem; border-radius: 999px;
+}
+.badge-commits { background: rgba(99,102,241,.15); color: #a5b4fc; }
+.badge-date    { background: rgba(148,163,184,.1); color: var(--text-muted); }
+
+.empty-state { text-align: center; padding: 4rem 2rem; color: var(--text-muted); }
+.empty-state .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+.empty-state h3 { color: var(--text); font-size: 1.1rem; margin-bottom: .5rem; }
+.empty-state p  { font-size: .9rem; margin-bottom: 1.5rem; }
+
+footer {
+  text-align: center; padding: 2rem; font-size: .8rem;
+  color: var(--text-muted); border-top: 1px solid var(--border);
+}
+footer a { color: var(--primary); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/"><span>TD</span> Agent</a>
+  <div class="nav-links">
+    <a href="/analyze">Analyze Repo</a>
+    <a href="https://github.com/boluaj16/td-agent" target="_blank">GitHub</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge">Powered by Gemini AI &amp; SonarQube</div>
+  <h1>Find technical debt<br>before it finds <em>you</em></h1>
+  <p>
+    TD Agent scans your git history with Gemini AI to detect code quality issues
+    and produce an AI Technical Debt Score — directly comparable to SonarQube's SQALE index.
+    Free tier. No server required.
+  </p>
+  <div class="hero-actions">
+    <a href="/analyze" class="btn btn-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      Analyze a repo
+    </a>
+    <a href="#results" class="btn btn-outline">View results ↓</a>
+  </div>
+</section>
+
+<div class="features">
+  <div class="feature-card">
+    <div class="feature-icon">🔍</div>
+    <h3>10 debt categories</h3>
+    <p>Code smells, architecture, complexity, security, performance, duplication, maintainability, docs, testing, dependencies.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">📊</div>
+    <h3>SQALE-comparable score</h3>
+    <p>AI debt score = sum of remediation minutes — the same unit SonarQube uses for its SQALE index.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">⚡</div>
+    <h3>Free tier</h3>
+    <p>Uses <code style="font-size:.8em;background:rgba(255,255,255,.08);padding:.1rem .3rem;border-radius:3px">gemini-2.5-flash-lite</code> with a built-in rate limiter. Analyse 1,500+ commits/day at zero cost.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">📈</div>
+    <h3>Timeline charts</h3>
+    <p>Track debt evolution over commit history. Overlay AI scores against SonarQube when both are available.</p>
+  </div>
+</div>
+
+<section class="section" id="results">
+  <div class="section-header">
+    <h2>Analyzed repositories</h2>
+    <a href="/analyze" class="btn btn-outline" style="font-size:.82rem;padding:.4rem 1rem">+ Analyze new repo</a>
+  </div>
+
+  {% if repos %}
+  <div class="repo-grid">
+    {% for r in repos %}
+    <a href="/project/{{ r.name }}" class="repo-card">
+      <div class="repo-card-header">
+        <div class="repo-icon">📦</div>
+        <div>
+          <div class="repo-name">{{ r.name }}</div>
+          <div class="repo-meta">{{ r.latest_date }}</div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-label">AI Debt Score</div>
+          <div class="stat-value ai">{{ "{:,}".format(r.latest_score) }}<span style="font-size:.7rem;font-weight:500;margin-left:2px">min</span></div>
+        </div>
+        {% if r.latest_sonar is not none %}
+        <div class="stat">
+          <div class="stat-label">SonarQube SQALE</div>
+          <div class="stat-value sonar">{{ "{:,}".format(r.latest_sonar) }}<span style="font-size:.7rem;font-weight:500;margin-left:2px">min</span></div>
+        </div>
+        {% if r.latest_score > 0 and r.latest_sonar > 0 %}
+        <div class="stat">
+          <div class="stat-label">AI vs Sonar</div>
+          {% set pct = ((r.latest_score - r.latest_sonar) / r.latest_sonar * 100) | int %}
+          <div class="stat-value {% if pct > 0 %}delta-pos{% else %}delta-neg{% endif %}">
+            {% if pct > 0 %}+{% endif %}{{ pct }}%
+          </div>
+        </div>
+        {% endif %}
+        {% endif %}
+      </div>
+      <div class="badge-row">
+        <span class="badge badge-commits">{{ r.commit_count }} commit{{ 's' if r.commit_count != 1 }}</span>
+        <span class="badge badge-date">Last analyzed {{ r.latest_date }}</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">🗂️</div>
+    <h3>No repositories analyzed yet</h3>
+    <p>Point TD Agent at a local git repository to get started.</p>
+    <a href="/analyze" class="btn btn-primary">Analyze your first repo</a>
+  </div>
+  {% endif %}
+</section>
+
+<footer>
+  TD Agent — AI Technical Debt Analysis &nbsp;·&nbsp;
+  MSc Computer Science dissertation project &nbsp;·&nbsp;
+  <a href="https://github.com/boluaj16/td-agent">View on GitHub</a>
+</footer>
+
+</body>
+</html>
