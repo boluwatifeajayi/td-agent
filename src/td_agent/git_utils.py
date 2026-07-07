@@ -1,10 +1,12 @@
 """Git repository helpers — commit history and file reading without checkout."""
 
 import logging
+import math
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Set
 
 import git
 
@@ -85,6 +87,114 @@ def get_source_files(repo_path: str, commit_hash: str) -> List[str]:
         if Path(blob.path).suffix.lower() in SOURCE_EXTENSIONS:
             result.append(blob.path)
     return sorted(result)
+
+
+def get_churn_data(repo_path: str) -> dict:
+    """Compute per-file change frequency across the full commit history.
+
+    Parses a single ``git log --numstat`` invocation — pure git metadata,
+    no file reading, no API calls. Fast even on large histories.
+
+    Returns a dict with:
+      - top_churned_files: top 10 files by change count, each
+        {"path": str, "change_count": int, "author_count": int}
+      - total_commits: number of commits in the history
+      - hotspot_threshold: 75th-percentile change count; files at or above
+        this are considered hotspots
+    """
+    path = Path(repo_path).expanduser().resolve()
+    # %H<TAB>%an marks each commit header; numstat lines follow as
+    # "<added>\t<deleted>\t<path>".
+    proc = subprocess.run(
+        ["git", "-C", str(path), "log", "--numstat", "--format=%H%x09%an"],
+        capture_output=True, text=True, check=True,
+    )
+
+    change_count: Dict[str, int] = {}
+    file_authors: Dict[str, Set[str]] = {}
+    total_commits = 0
+    current_author = ""
+
+    for line in proc.stdout.splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        first = parts[0]
+        if len(parts) == 2 and len(first) == 40 and all(c in "0123456789abcdef" for c in first):
+            total_commits += 1
+            current_author = parts[1]
+            continue
+        if len(parts) == 3:
+            file_path = parts[2]
+            # Normalise rename notation: "old => new" / "dir/{old => new}/f"
+            if "=>" in file_path:
+                if "{" in file_path:
+                    prefix, rest = file_path.split("{", 1)
+                    inner, suffix = rest.split("}", 1)
+                    new_part = inner.split("=>")[-1].strip()
+                    file_path = (prefix + new_part + suffix).replace("//", "/")
+                else:
+                    file_path = file_path.split("=>")[-1].strip()
+            if _is_excluded(file_path):
+                continue
+            change_count[file_path] = change_count.get(file_path, 0) + 1
+            file_authors.setdefault(file_path, set()).add(current_author)
+
+    if not change_count:
+        return {"top_churned_files": [], "total_commits": total_commits, "hotspot_threshold": 0}
+
+    counts = sorted(change_count.values())
+    # 75th percentile (nearest-rank method)
+    rank = max(1, math.ceil(0.75 * len(counts)))
+    hotspot_threshold = counts[rank - 1]
+
+    ranked = sorted(change_count.items(), key=lambda kv: (-kv[1], kv[0]))
+    top_churned_files = [
+        {
+            "path": p,
+            "change_count": n,
+            "author_count": len(file_authors.get(p, set())),
+        }
+        for p, n in ranked[:10]
+    ]
+
+    return {
+        "top_churned_files": top_churned_files,
+        "total_commits": total_commits,
+        "hotspot_threshold": hotspot_threshold,
+    }
+
+
+def get_recent_files(repo_path: str, commit_hash: str, n_commits: int = 10) -> List[str]:
+    """Paths touched by the ``n_commits`` most recent commits up to ``commit_hash``.
+
+    Order-preserving and de-duplicated (most recently touched first).
+    """
+    path = Path(repo_path).expanduser().resolve()
+    proc = subprocess.run(
+        ["git", "-C", str(path), "log", "--name-only", "--format=",
+         "-n", str(n_commits), commit_hash],
+        capture_output=True, text=True, check=True,
+    )
+    seen: Set[str] = set()
+    result: List[str] = []
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if line and line not in seen:
+            seen.add(line)
+            result.append(line)
+    return result
+
+
+def get_file_sizes(repo_path: str, commit_hash: str) -> Dict[str, int]:
+    """Blob sizes (bytes) for every file at a commit, without checkout."""
+    repo = _open_repo(repo_path)
+    commit = repo.commit(commit_hash)
+    return {
+        blob.path: blob.size
+        for blob in commit.tree.traverse()
+        if blob.type == "blob"
+    }
 
 
 def read_file_at_commit(repo_path: str, commit_hash: str, file_path: str) -> Optional[str]:

@@ -11,11 +11,38 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-from .git_utils import CommitInfo, get_source_files, read_file_at_commit
+from pathlib import Path
+
+from .git_utils import (
+    CommitInfo,
+    get_churn_data,
+    get_file_sizes,
+    get_recent_files,
+    get_source_files,
+    read_file_at_commit,
+)
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+# --- Smart file selection -------------------------------------------------
+
+_DEBT_PRONE_KEYWORDS = ("auth", "config", "payment", "security", "gateway", "token", "oauth")
+_ENTRY_POINT_NAMES = frozenset({"main", "app", "server", "index", "application"})
+_LOCK_FILES = frozenset({"package-lock.json", "poetry.lock", "pipfile.lock"})
+_BUILD_DIRS = frozenset({"target", "dist", "build", ".gradle"})
+
+
+def _is_excluded_file(path: str) -> bool:
+    """Generated files, lock files, and build artifacts — never worth analysing."""
+    name = Path(path).name.lower()
+    if name in _LOCK_FILES:
+        return True
+    if ".generated." in name or name.endswith("_pb2.py") or name.endswith(".min.js"):
+        return True
+    return any(part.lower() in _BUILD_DIRS for part in Path(path).parts[:-1])
+
 
 _CATEGORIES = [
     "code_smell", "architectural", "maintainability",
@@ -23,6 +50,7 @@ _CATEGORIES = [
     "complexity", "documentation", "testing", "dependency",
 ]
 _SEVERITIES = ["low", "medium", "high", "critical"]
+_CONFIDENCES = ["high", "medium", "low"]
 
 # Schema included verbatim in the prompt — Gemini uses response_mime_type for JSON mode
 # and the schema description steers the structure.
@@ -36,21 +64,24 @@ _ANALYSIS_SCHEMA = {
                 "properties": {
                     "category":            {"type": "string", "enum": _CATEGORIES},
                     "severity":            {"type": "string", "enum": _SEVERITIES},
+                    "confidence":          {"type": "string", "enum": _CONFIDENCES},
                     "remediation_minutes": {"type": "integer"},
                     "description":         {"type": "string"},
                     "location":            {"type": "string"},
                     "suggestion":          {"type": "string"},
+                    "why_debt":            {"type": "string"},
                 },
                 "required": [
-                    "category", "severity", "remediation_minutes",
-                    "description", "location", "suggestion",
+                    "category", "severity", "confidence", "remediation_minutes",
+                    "description", "location", "suggestion", "why_debt",
                 ],
             },
         },
-        "overall_assessment": {"type": "string"},
-        "files_analyzed":     {"type": "integer"},
+        "summary":             {"type": "string"},
+        "overall_assessment":  {"type": "string"},
+        "files_analyzed":      {"type": "integer"},
     },
-    "required": ["issues", "overall_assessment", "files_analyzed"],
+    "required": ["issues", "summary", "overall_assessment", "files_analyzed"],
 }
 
 _SCHEMA_TEXT = json.dumps(_ANALYSIS_SCHEMA, indent=2)
@@ -67,6 +98,23 @@ _SYSTEM_PROMPT = (
     "This metric is designed to be directly comparable to SonarQube's SQALE index. "
     "Be thorough but realistic — focus on meaningful, actionable debt rather than trivial "
     "style preferences unless they are pervasive across the codebase."
+    "\n\n"
+    "For each issue's confidence field, judge how certain you are based on the clarity of "
+    "evidence visible in the code: use 'high' for clear-cut, mechanically verifiable issues "
+    "(duplicated blocks, missing null checks, obvious hardcoded secrets), 'medium' when the "
+    "issue is likely but depends on usage patterns you can't fully see, and 'low' for "
+    "judgment calls about architecture or design intent made without full repository context. "
+    "\n\n"
+    "For each issue's why_debt field, write 1-2 sentences explaining why this specifically "
+    "constitutes technical debt and the concrete consequence if left unaddressed — not a "
+    "restatement of the description, but the downstream cost. Example: 'Authentication logic "
+    "appears in 7 services. Password policy changes require editing multiple locations.' "
+    "\n\n"
+    "For the top-level summary field, write 2-4 sentences describing the overall debt picture "
+    "across the whole codebase: which category of debt dominates, where it is concentrated, "
+    "and the single biggest risk if nothing is fixed. Focus on patterns across files, not a "
+    "list of individual issues. Repeat the same content in overall_assessment for "
+    "backward compatibility."
 )
 
 
@@ -99,6 +147,8 @@ class TechnicalDebtIssue:
     description: str
     location: str
     suggestion: str
+    confidence: str = "medium"
+    why_debt: str = ""
 
 
 @dataclass
@@ -108,6 +158,10 @@ class CommitAnalysisResult:
     ai_debt_score: int
     files_analyzed: int
     overall_assessment: str
+    summary: str = ""
+    model: str = ""
+    files_skipped: int = 0
+    duplicates_removed: int = 0
     analysis_error: Optional[str] = None
 
     @property
@@ -151,7 +205,7 @@ class TechnicalDebtAnalyzer:
 
     def analyze_commit(self, repo_path: str, commit: CommitInfo) -> CommitAnalysisResult:
         """Analyse a single commit. Always returns a result — errors are captured."""
-        files = self._collect_files(repo_path, commit.hash)
+        files, files_skipped = self._collect_files(repo_path, commit.hash)
         if not files:
             return CommitAnalysisResult(
                 commit=commit,
@@ -159,6 +213,8 @@ class TechnicalDebtAnalyzer:
                 ai_debt_score=0,
                 files_analyzed=0,
                 overall_assessment="No source files found for analysis.",
+                summary="No source files found for analysis.",
+                model=self.model,
             )
 
         logger.debug(
@@ -168,12 +224,17 @@ class TechnicalDebtAnalyzer:
         try:
             raw = self._call_llm(files, commit)
             issues = [TechnicalDebtIssue(**issue) for issue in raw.get("issues", [])]
+            issues, duplicates_removed = self._dedupe_issues(issues)
             return CommitAnalysisResult(
                 commit=commit,
                 issues=issues,
                 ai_debt_score=sum(i.remediation_minutes for i in issues),
                 files_analyzed=raw.get("files_analyzed", len(files)),
                 overall_assessment=raw.get("overall_assessment", ""),
+                summary=raw.get("summary", raw.get("overall_assessment", "")),
+                model=self.model,
+                files_skipped=files_skipped,
+                duplicates_removed=duplicates_removed,
             )
         except Exception as exc:
             logger.error("Analysis failed for %s: %s", commit.short_hash, exc)
@@ -183,6 +244,8 @@ class TechnicalDebtAnalyzer:
                 ai_debt_score=0,
                 files_analyzed=len(files),
                 overall_assessment="",
+                model=self.model,
+                files_skipped=files_skipped,
                 analysis_error=str(exc),
             )
 
@@ -190,22 +253,76 @@ class TechnicalDebtAnalyzer:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _collect_files(self, repo_path: str, commit_hash: str) -> List[Tuple[str, str]]:
-        """Gather readable source files up to MAX_FILES / MAX_CHARS limits."""
-        paths = get_source_files(repo_path, commit_hash)
+    def _prioritize_paths(self, repo_path: str, commit_hash: str, paths: List[str]) -> List[str]:
+        """Order candidate paths so the most debt-relevant files are analysed first.
+
+        Priority tiers (highest first):
+          1. High-churn files (from git history)
+          2. Debt-prone names: auth, config, payment, security, gateway, token, oauth
+          3. Recently modified files
+          4. Service entry points (main, app, server, index, application)
+          5. Remaining files by blob size, descending
+
+        Each git-metadata lookup degrades gracefully — if churn/recency/size
+        data is unavailable, the corresponding tier is simply skipped.
+        """
+        path_set = set(paths)
+        ordered: List[str] = []
+        seen: set = set()
+
+        def add(candidates: List[str]) -> None:
+            for p in candidates:
+                if p in path_set and p not in seen:
+                    seen.add(p)
+                    ordered.append(p)
+
+        try:
+            churn = get_churn_data(repo_path)
+            add([f["path"] for f in churn["top_churned_files"]])
+        except Exception as exc:
+            logger.debug("Churn data unavailable for %s: %s", repo_path, exc)
+
+        add([p for p in paths if any(k in p.lower() for k in _DEBT_PRONE_KEYWORDS)])
+
+        try:
+            add(get_recent_files(repo_path, commit_hash))
+        except Exception as exc:
+            logger.debug("Recent-file data unavailable for %s: %s", repo_path, exc)
+
+        add([p for p in paths if Path(p).stem.lower() in _ENTRY_POINT_NAMES])
+
+        sizes: dict = {}
+        try:
+            sizes = get_file_sizes(repo_path, commit_hash)
+        except Exception as exc:
+            logger.debug("File sizes unavailable for %s: %s", repo_path, exc)
+        remaining = [p for p in paths if p not in seen]
+        remaining.sort(key=lambda p: -sizes.get(p, 0))
+        add(remaining)
+
+        return ordered
+
+    def _collect_files(self, repo_path: str, commit_hash: str) -> Tuple[List[Tuple[str, str]], int]:
+        """Gather readable source files up to MAX_FILES / MAX_CHARS limits.
+
+        Returns (collected files, count of candidate source files skipped
+        because of the caps or unreadability).
+        """
+        paths = [p for p in get_source_files(repo_path, commit_hash) if not _is_excluded_file(p)]
+        paths = self._prioritize_paths(repo_path, commit_hash, paths)
         collected: List[Tuple[str, str]] = []
         total_chars = 0
-        for path in paths:
+        for i, path in enumerate(paths):
             if len(collected) >= self.MAX_FILES:
-                break
+                return collected, len(paths) - i
             content = read_file_at_commit(repo_path, commit_hash, path)
             if content is None:
                 continue
             if total_chars + len(content) > self.MAX_CHARS:
-                break
+                return collected, len(paths) - i
             collected.append((path, content))
             total_chars += len(content)
-        return collected
+        return collected, len(paths) - len(collected)
 
     def _build_prompt(self, files: List[Tuple[str, str]], commit: CommitInfo) -> str:
         header = (
@@ -243,6 +360,26 @@ class TechnicalDebtAnalyzer:
                 config=self._generate_config,
             )
             return self._parse_json(response2.text)
+
+    @staticmethod
+    def _dedupe_issues(
+        issues: List[TechnicalDebtIssue],
+    ) -> Tuple[List[TechnicalDebtIssue], int]:
+        """Drop issues that repeat an identical (location, description) pair.
+
+        Gemini occasionally emits the same finding multiple times verbatim
+        (observed repeatedly for the same file/description on larger repos
+        like train-ticket). Keeps the first occurrence, order preserved.
+        """
+        seen: set = set()
+        deduped: List[TechnicalDebtIssue] = []
+        for issue in issues:
+            key = (issue.location, issue.description)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(issue)
+        return deduped, len(issues) - len(deduped)
 
     @staticmethod
     def _parse_json(text: str) -> dict:

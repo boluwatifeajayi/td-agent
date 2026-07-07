@@ -78,6 +78,34 @@ class TestTechnicalDebtAnalyzer:
         assert result.overall_assessment == "Moderate debt, manageable."
 
     @patch("td_agent.analyzer.genai.Client")
+    @patch("td_agent.analyzer.get_source_files", return_value=["src/SleuthAnnotationUtils.java"])
+    @patch("td_agent.analyzer.read_file_at_commit", return_value="public class SleuthAnnotationUtils {}")
+    def test_duplicate_issues_are_deduplicated(self, mock_read, mock_files, mock_client_cls):
+        analyzer = _make_analyzer(mock_client_cls)
+        duplicate_issue = {
+            "category": "code_smell",
+            "severity": "medium",
+            "confidence": "high",
+            "remediation_minutes": 20,
+            "description": "Method uses reflection unsafely",
+            "location": "src/SleuthAnnotationUtils.java:42",
+            "suggestion": "Avoid reflection",
+            "why_debt": "Reflection breaks at runtime with no compile-time safety net.",
+        }
+        unique_issue = {**duplicate_issue, "location": "src/Other.java:10", "description": "Different finding"}
+        llm_data = _fake_llm_response(
+            issues=[duplicate_issue] * 7 + [unique_issue],
+            files=1,
+        )
+        analyzer._client.models.generate_content.return_value = _make_gemini_response(llm_data)
+
+        result = analyzer.analyze_commit("/fake/repo", _fake_commit())
+
+        assert len(result.issues) == 2
+        assert result.duplicates_removed == 6
+        assert result.ai_debt_score == 40  # 2 issues x 20 min, not 8 x 20
+
+    @patch("td_agent.analyzer.genai.Client")
     @patch("td_agent.analyzer.get_source_files", return_value=[])
     def test_no_source_files_returns_zero_score(self, mock_files, mock_client_cls):
         analyzer = _make_analyzer(mock_client_cls)
@@ -133,7 +161,8 @@ class TestTechnicalDebtAnalyzer:
         assert result.severity_breakdown == {"low": 1, "high": 2}
 
     @patch("td_agent.analyzer.genai.Client")
-    @patch("td_agent.analyzer.get_source_files", return_value=["f1.py"] * 200)
+    @patch("td_agent.analyzer.get_source_files",
+           return_value=[f"src/file_{i}.py" for i in range(200)])
     @patch("td_agent.analyzer.read_file_at_commit", return_value="x = 1")
     def test_file_count_capped(self, mock_read, mock_files, mock_client_cls):
         analyzer = _make_analyzer(mock_client_cls)
@@ -143,8 +172,42 @@ class TestTechnicalDebtAnalyzer:
         result = analyzer.analyze_commit("/fake/repo", _fake_commit())
 
         assert result.analysis_error is None
+        # 200 unique candidates, capped at MAX_FILES → the rest are skipped
+        assert result.files_skipped == 200 - analyzer.MAX_FILES
         # Confirm generate_content was called exactly once (all files batched in one call)
         analyzer._client.models.generate_content.assert_called_once()
+
+    @patch("td_agent.analyzer.genai.Client")
+    @patch("td_agent.analyzer.get_source_files", return_value=[
+        "src/util.py",
+        "src/auth/login.py",
+        "src/main.py",
+        "package-lock.json",
+        "proto/schema_pb2.py",
+        "static/vendor.min.js",
+        "dist/bundle.js",
+    ])
+    @patch("td_agent.analyzer.read_file_at_commit", return_value="x = 1")
+    def test_prioritization_and_exclusions(self, mock_read, mock_files, mock_client_cls):
+        analyzer = _make_analyzer(mock_client_cls)
+        llm_data = _fake_llm_response(issues=[], files=3)
+        analyzer._client.models.generate_content.return_value = _make_gemini_response(llm_data)
+
+        analyzer.analyze_commit("/fake/repo", _fake_commit())
+
+        prompt = analyzer._client.models.generate_content.call_args.kwargs["contents"]
+        # Excluded files never reach the prompt
+        assert "package-lock.json" not in prompt
+        assert "schema_pb2.py" not in prompt
+        assert "vendor.min.js" not in prompt
+        assert "dist/bundle.js" not in prompt
+        # Debt-prone (auth) file appears before entry point, which appears
+        # before the plain remaining file (churn/recency tiers are empty for
+        # a nonexistent repo path)
+        auth_pos = prompt.index("src/auth/login.py")
+        main_pos = prompt.index("src/main.py")
+        util_pos = prompt.index("src/util.py")
+        assert auth_pos < main_pos < util_pos
 
     @patch("td_agent.analyzer.genai.Client")
     @patch("td_agent.analyzer.get_source_files", return_value=["src/A.py"])

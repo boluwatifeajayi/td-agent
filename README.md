@@ -15,12 +15,16 @@ TD Agent analyses a git repository's commit history by sending source-code snaps
 
 ## Features
 
-- Analyses any local git repository at configurable commit intervals
+- Analyses any git repository (local path via CLI, or GitHub URL via the web UI) at configurable commit intervals
 - Detects **10 debt categories**: code smells, architectural issues, complexity, security, performance, duplication, maintainability, documentation, testing, dependencies
-- Assigns **severity** (low / medium / high / critical) and realistic **remediation estimates** per issue
+- Assigns **severity** (low / medium / high / critical), a **confidence** level, and realistic **remediation estimates** per issue
+- **"Why is this debt?"** explanations — each issue includes the concrete consequence of leaving it unaddressed
+- **Natural language summary** of the overall debt picture per analysis
+- **Smart file prioritisation** — high-churn files, debt-prone paths (auth/config/payment/…), recently modified files, and entry points are analysed first within the 80-file / 400k-char budget
+- **Code churn analysis** — per-file change frequency and author counts from git history, with hotspot detection
+- **FastAPI backend + Next.js/Tailwind frontend** with background analysis jobs, live progress, timeline chart, churn hotspots table, and a filterable issue list
 - Outputs results to **CSV** for longitudinal analysis
-- **Web dashboard** (Flask + Chart.js) with timeline charts, category/severity breakdowns, and a filterable issue table
-- **SonarQube comparison** — overlays AI score against SQALE index on the same timeline when both CSVs are present
+- **SonarQube comparison** — overlays AI score against SQALE index when both CSVs are present (legacy Flask dashboard)
 - Standalone **HTML report** generation
 - Built-in **rate limiter** for Gemini free tier (14 req/min to stay inside the 15 req/min quota)
 
@@ -97,14 +101,47 @@ td-agent analyze --repo /path/to/repo --commits 50
 td-agent report --repo myproject --output report.html
 ```
 
-### Web Dashboard
+### Web app (FastAPI + Next.js)
+
+The web app runs as two processes:
+
+```bash
+# 1. Backend — FastAPI on port 8000
+cd web-api
+uvicorn main:app --reload --port 8000
+
+# 2. Frontend — Next.js on port 3000 (separate terminal)
+cd web-next
+cp .env.local.example .env.local   # first time only
+npm install                        # first time only
+npm run dev
+```
+
+Open **http://localhost:3000**, paste a GitHub URL, and click *Analyse repo*.
+The backend clones the repo to a temp directory, runs churn analysis and the
+Gemini analyzer as a background job, and the frontend polls job progress before
+redirecting to the results dashboard.
+
+Backend endpoints (all JSON):
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/analyse` | Start a background analysis job (`{repo_url, mode: "latest" \| "history"}`) |
+| `GET /api/jobs/{job_id}` | Job status + progress |
+| `GET /api/results/{repo}` | Full latest result (issues, summary, churn, breakdowns) |
+| `GET /api/results/{repo}/history` | Timeline data points |
+| `GET /api/repos` | All analysed repos |
+
+### Legacy Flask dashboard (deprecated)
+
+The original Flask dashboard in `web/` is **deprecated** but kept for
+reference (it still hosts the SonarQube comparison view used in the
+dissertation):
 
 ```bash
 python web/app.py
 # Open http://localhost:5000
 ```
-
-The dashboard shows all analysed repositories with their latest AI debt scores. If a matching SonarQube CSV is present at `~/dissertation/results/{repo}_results.csv`, the comparison panel appears automatically.
 
 ---
 
@@ -130,16 +167,19 @@ Results are saved to `data/<repo_name>_ai_results.csv`:
 
 ```
 src/td_agent/
-  git_utils.py   — commit history traversal + file reading at commit (no checkout)
+  git_utils.py   — commit history, churn analysis, file reading at commit (no checkout)
   sampler.py     — commit sampling strategies (every-n, evenly-spaced, latest)
-  analyzer.py    — Gemini API integration, JSON parsing, sliding-window rate limiter
+  analyzer.py    — Gemini API integration, smart file prioritisation, rate limiter
   report.py      — CSV persistence (error-safe dedup) + standalone HTML report
   cli.py         — Click CLI entry point
-web/
-  app.py         — Flask dashboard with SonarQube comparison loader
-  templates/     — Jinja2 HTML templates (dark theme, Chart.js)
-data/            — CSV output files (gitignored)
-tests/           — 20 unit tests (all mocked; no real API calls)
+web-api/
+  main.py        — FastAPI backend (port 8000): background jobs, results API, CORS
+web-next/        — Next.js 14 + Tailwind frontend (port 3000)
+  app/           —   pages: / (landing), /analyse/[jobId] (progress), /r/[repo] (results)
+  lib/api.ts     —   typed API client (NEXT_PUBLIC_API_URL)
+web/             — DEPRECATED Flask dashboard, kept for reference
+data/            — CSV results + churn/meta JSON (gitignored)
+tests/           — unit tests (all mocked; no real API calls)
 ```
 
 ### Methodology
@@ -147,9 +187,9 @@ tests/           — 20 unit tests (all mocked; no real API calls)
 For each sampled commit, TD Agent:
 
 1. Lists all source files at that commit (using GitPython — no checkout required)
-2. Reads up to 80 files / 400,000 characters of source code
+2. Prioritises them (churn hotspots → debt-prone paths → recently modified → entry points → largest first) and reads up to 80 files / 400,000 characters
 3. Sends a single prompt to `gemini-2.5-flash-lite` requesting a structured JSON analysis
-4. Parses the response into typed `TechnicalDebtIssue` objects
+4. Parses the response into typed `TechnicalDebtIssue` objects (category, severity, confidence, why-debt explanation, remediation estimate)
 5. Sums `remediation_minutes` across all issues to produce the AI Debt Score
 
 The score is intentionally defined to match SonarQube's SQALE metric so both can be plotted on the same axis and compared statistically.
@@ -163,7 +203,7 @@ pip install pytest
 pytest tests/ -v
 ```
 
-All 20 tests mock the Gemini API — no real key or network access needed.
+All tests mock the Gemini API and git subprocess calls — no real key or network access needed.
 
 ---
 

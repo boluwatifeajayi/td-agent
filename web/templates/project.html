@@ -164,12 +164,12 @@ td { color: var(--text); vertical-align: top; }
       </div>
       {% if latest.ai_debt_score > 0 and sq_summary.sqale_index > 0 %}
       <div class="stat-card">
-        <div class="stat-card-label">AI vs SonarQube</div>
+        <div class="stat-card-label">AI vs SonarQube (min)</div>
         {% set pct = ((latest.ai_debt_score - sq_summary.sqale_index) / sq_summary.sqale_index * 100) | int %}
         <div class="stat-card-value {% if pct > 0 %}delta-pos{% else %}delta-neg{% endif %}">
           {% if pct > 0 %}+{% endif %}{{ pct }}%
         </div>
-        <div class="stat-card-sub">{% if pct > 0 %}AI detects more debt{% else %}SonarQube detects more{% endif %}</div>
+        <div class="stat-card-sub">AI estimates {{ pct | abs }}% {% if pct < 0 %}fewer{% else %}more{% endif %} remediation minutes than SonarQube</div>
       </div>
       {% endif %}
       {% endif %}
@@ -273,6 +273,7 @@ td { color: var(--text); vertical-align: top; }
             &nbsp;·&nbsp; {{ r.commit_date[:10] }}
             &nbsp;·&nbsp; {{ r.issue_count }} issue{{ 's' if r.issue_count != 1 }}
             &nbsp;·&nbsp; {{ r.files_analyzed }} file{{ 's' if r.files_analyzed != 1 }}
+            &nbsp;·&nbsp; <span style="color:var(--primary);font-size:.72rem">{{ r.model or 'unknown' }}</span>
           </div>
         </div>
       </div>
@@ -316,6 +317,11 @@ fetch('/api/data/{{ repo_name }}')
   .then(buildTimeline);
 
 function buildTimeline(d) {
+  if (d.scores.length < 2) {
+    const wrap = document.getElementById('timelineChart').parentElement;
+    wrap.innerHTML = '<p style="color:var(--text-muted);font-size:.88rem;text-align:center;padding:2rem 1rem">Timeline will appear once multiple commits have been analyzed for this repo.</p>';
+    return;
+  }
   const datasets = [{
     label: 'AI Debt Score (min)',
     data: d.scores,

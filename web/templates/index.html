@@ -207,11 +207,12 @@ footer a { color: var(--primary); text-decoration: none; }
         </div>
         {% if r.latest_score > 0 and r.latest_sonar > 0 %}
         <div class="stat">
-          <div class="stat-label">AI vs Sonar</div>
+          <div class="stat-label">AI vs Sonar (min)</div>
           {% set pct = ((r.latest_score - r.latest_sonar) / r.latest_sonar * 100) | int %}
           <div class="stat-value {% if pct > 0 %}delta-pos{% else %}delta-neg{% endif %}">
             {% if pct > 0 %}+{% endif %}{{ pct }}%
           </div>
+          <div style="font-size:.68rem;color:var(--text-muted);margin-top:.15rem">{{ pct | abs }}% {% if pct < 0 %}fewer{% else %}more{% endif %} remediation min</div>
         </div>
         {% endif %}
         {% endif %}

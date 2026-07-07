@@ -14,6 +14,7 @@ _FIELDNAMES = [
     "commit_short_hash",
     "commit_date",
     "commit_message",
+    "model",
     "ai_debt_score",
     "issue_count",
     "files_analyzed",
@@ -21,6 +22,8 @@ _FIELDNAMES = [
     "severity_breakdown",
     "issues",            # full issue list as JSON array
     "overall_assessment",
+    "summary",
+    "duplicates_removed",
 ]
 
 
@@ -68,6 +71,7 @@ def save_results(
                 "commit_short_hash":  r.commit.short_hash,
                 "commit_date":        r.commit.date.isoformat(),
                 "commit_message":     r.commit.message,
+                "model":              r.model,
                 "ai_debt_score":      r.ai_debt_score,
                 "issue_count":        len(r.issues),
                 "files_analyzed":     r.files_analyzed,
@@ -77,14 +81,18 @@ def save_results(
                     {
                         "category":            i.category,
                         "severity":            i.severity,
+                        "confidence":          i.confidence,
                         "remediation_minutes": i.remediation_minutes,
                         "description":         i.description,
                         "location":            i.location,
                         "suggestion":          i.suggestion,
+                        "why_debt":            i.why_debt,
                     }
                     for i in r.issues
                 ]),
                 "overall_assessment": r.overall_assessment,
+                "summary":            r.summary,
+                "duplicates_removed": r.duplicates_removed,
             })
     return path
 
@@ -103,6 +111,7 @@ def load_results(repo_name: str, data_dir: Optional[Path] = None) -> List[Dict]:
         row["ai_debt_score"]      = int(row.get("ai_debt_score") or 0)
         row["issue_count"]        = int(row.get("issue_count") or 0)
         row["files_analyzed"]     = int(row.get("files_analyzed") or 0)
+        row["duplicates_removed"] = int(row.get("duplicates_removed") or 0)
     # Sort oldest → newest for timeline charts
     rows.sort(key=lambda r: r["commit_date"])
     return rows
