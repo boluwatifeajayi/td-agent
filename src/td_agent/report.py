@@ -79,14 +79,15 @@ def save_results(
                 "severity_breakdown": json.dumps(r.severity_breakdown),
                 "issues":             json.dumps([
                     {
-                        "category":            i.category,
-                        "severity":            i.severity,
-                        "confidence":          i.confidence,
-                        "remediation_minutes": i.remediation_minutes,
-                        "description":         i.description,
-                        "location":            i.location,
-                        "suggestion":          i.suggestion,
-                        "why_debt":            i.why_debt,
+                        "category":                i.category,
+                        "severity":                i.severity,
+                        "confidence":              i.confidence,
+                        "remediation_minutes":     i.remediation_minutes,
+                        "description":             i.description,
+                        "location":                i.location,
+                        "suggestion":              i.suggestion,
+                        "why_debt":                i.why_debt,
+                        "is_cross_service_pattern": i.is_cross_service_pattern,
                     }
                     for i in r.issues
                 ]),

@@ -13,6 +13,28 @@ import {
   YAxis,
 } from "recharts";
 import {
+  ArrowLeft,
+  Bug,
+  Check,
+  FileCode2,
+  Flame,
+  GitCommitHorizontal,
+  Link2,
+  RotateCw,
+  Share2,
+} from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import {
   getHistory,
   getResult,
   getSonarHistory,
@@ -23,28 +45,41 @@ import {
 } from "@/lib/api";
 
 const SEVERITY_BADGE: Record<string, string> = {
-  critical: "bg-red-600 text-white",
-  high: "bg-orange-500 text-white",
-  medium: "bg-yellow-500 text-white",
-  low: "bg-green-600 text-white",
+  critical: "bg-red-500/15 text-red-400",
+  high: "bg-orange-500/15 text-orange-400",
+  medium: "bg-yellow-500/15 text-yellow-400",
+  low: "bg-emerald-500/15 text-emerald-400",
 };
 
 const CONFIDENCE_BADGE: Record<string, string> = {
-  high: "bg-green-100 text-green-800",
-  medium: "bg-yellow-100 text-yellow-800",
-  low: "bg-red-100 text-red-800",
+  high: "bg-emerald-500/15 text-emerald-400",
+  medium: "bg-yellow-500/15 text-yellow-400",
+  low: "bg-red-500/15 text-red-400",
 };
 
 const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
+const CHART_GRID = "oklch(1 0 0 / 8%)";
+const CHART_TICK = "oklch(0.708 0 0)";
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ComponentType<{ className?: string }>;
+}) {
   return (
-    <div className="rounded-xl border border-gray-200 p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-        {label}
-      </p>
-      <p className="mt-1 text-3xl font-bold">{value}</p>
-    </div>
+    <Card className="p-5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <Icon className="size-3.5 text-muted-foreground/50" />
+      </div>
+      <p className="mt-1.5 text-3xl font-semibold tabular-nums">{value}</p>
+    </Card>
   );
 }
 
@@ -136,8 +171,8 @@ export default function ResultsPage() {
     return (
       <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-6">
         <h1 className="text-xl font-semibold">Couldn&apos;t load results</h1>
-        <p className="mt-2 text-sm text-gray-500">{error}</p>
-        <Link href="/" className="mt-6 text-sm font-semibold text-blue-600 hover:underline">
+        <p className="mt-2 text-center text-sm text-muted-foreground">{error}</p>
+        <Link href="/" className={cn(buttonVariants({ variant: "outline" }), "mt-6")}>
           ← Back to home
         </Link>
       </main>
@@ -147,7 +182,7 @@ export default function ResultsPage() {
   if (!result) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+        <span className="size-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
       </main>
     );
   }
@@ -158,272 +193,320 @@ export default function ResultsPage() {
   }));
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-12">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Link href="/" className="text-xs font-medium text-gray-400 hover:text-blue-600">
-            ← All repositories
-          </Link>
-          <h1 className="mt-1 text-3xl font-bold">{result.repo_name}</h1>
-          <p className="mt-1 text-xs text-gray-500">
-            Commit <span className="font-mono">{result.commit.short_hash}</span> ·{" "}
-            {result.commit.date.slice(0, 10)} · {result.model}
-            {result.duplicates_removed > 0 &&
-              ` · ${result.duplicates_removed} duplicate issue${result.duplicates_removed === 1 ? "" : "s"} removed`}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleShare}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold transition hover:border-blue-600 hover:text-blue-600"
-          >
-            {copied ? "Copied!" : "Share"}
-          </button>
-          <button
-            onClick={handleReanalyse}
-            disabled={reanalysing || !result.repo_url}
-            title={result.repo_url ? undefined : "Original repo URL unknown (analysed before URL tracking)"}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-          >
-            {reanalysing ? "Starting…" : "Re-analyse"}
-          </button>
-        </div>
-      </div>
+    <div className="relative min-h-screen overflow-hidden">
+      <div className="bg-grid pointer-events-none absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_80%_40%_at_50%_0%,black_5%,transparent_60%)]" />
 
-      <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="AI debt score" value={`${result.ai_debt_score.toLocaleString()} min`} />
-        <StatCard label="Issues found" value={result.issue_count} />
-        <StatCard label="Churn hotspots" value={hotspots.length} />
-        <StatCard label="Files scanned" value={result.files_analyzed} />
-      </div>
-
-      {result.summary && (
-        <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-            AI summary
-          </p>
-          <p className="mt-2 leading-relaxed text-blue-950">{result.summary}</p>
-        </div>
-      )}
-
-      <section className="mt-10">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Debt over time</h2>
-          <div className="flex rounded-lg border border-gray-200 text-sm font-medium overflow-hidden">
-            <button
-              onClick={() => setDebtTab("ai")}
-              className={`px-4 py-1.5 transition ${debtTab === "ai" ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-800"}`}
+      <main className="relative z-10 mx-auto max-w-5xl px-6 py-12">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <Link
+              href="/"
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
             >
-              AI Score
-            </button>
-            <button
-              onClick={() => setDebtTab("sonar")}
-              className={`px-4 py-1.5 transition border-l border-gray-200 ${debtTab === "sonar" ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-800"}`}
+              <ArrowLeft className="size-3" />
+              All repositories
+            </Link>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">{result.repo_name}</h1>
+            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+              <span className="font-mono">{result.commit.short_hash}</span>
+              <span>·</span>
+              <span>{result.commit.date.slice(0, 10)}</span>
+              <span>·</span>
+              <span>{result.model}</span>
+              {result.duplicates_removed > 0 && (
+                <>
+                  <span>·</span>
+                  <span>
+                    {result.duplicates_removed} duplicate issue
+                    {result.duplicates_removed === 1 ? "" : "s"} removed
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleShare} className="gap-1.5">
+              {copied ? <Check className="size-3.5" /> : <Share2 className="size-3.5" />}
+              {copied ? "Copied!" : "Share"}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleReanalyse}
+              disabled={reanalysing || !result.repo_url}
+              title={result.repo_url ? undefined : "Original repo URL unknown (analysed before URL tracking)"}
+              className="gap-1.5"
             >
-              SonarQube SQALE
-            </button>
+              <RotateCw className="size-3.5" />
+              {reanalysing ? "Starting…" : "Re-analyse"}
+            </Button>
           </div>
         </div>
 
-        {debtTab === "ai" && (
-          <>
-            {chartData.length >= 2 ? (
-              <div className="mt-4 h-64 rounded-xl border border-gray-200 p-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#6b7280" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="score"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
-                      name="AI debt score (min)"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-dashed border-gray-300 p-6 text-center">
-                <p className="text-sm text-gray-500">
-                  Analyse with history mode to see debt over time.
-                </p>
-                <button
-                  onClick={handleAnalyseHistory}
-                  disabled={startingHistory || !result.repo_url}
-                  title={result.repo_url ? undefined : "Original repo URL unknown (analysed before URL tracking)"}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {startingHistory ? "Starting…" : "Analyse with history mode"}
-                </button>
-              </div>
-            )}
-          </>
+        <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard label="AI debt score" value={`${result.ai_debt_score.toLocaleString()} min`} icon={Flame} />
+          <StatCard label="Issues found" value={result.issue_count} icon={Bug} />
+          <StatCard label="Churn hotspots" value={hotspots.length} icon={GitCommitHorizontal} />
+          <StatCard label="Files scanned" value={result.files_analyzed} icon={FileCode2} />
+        </div>
+
+        {result.summary && (
+          <Card className="mt-6 border-blue-500/20 bg-blue-500/[0.06] p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">
+              AI summary
+            </p>
+            <p className="mt-2 leading-relaxed text-foreground/90">{result.summary}</p>
+          </Card>
         )}
 
-        {debtTab === "sonar" && (
-          <>
-            {sonarAvailable && sonarData && sonarData.length >= 2 ? (
-              <>
-                <div className="mt-4 h-64 rounded-xl border border-gray-200 p-4">
+        <section className="mt-10">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Debt over time</h2>
+            <div className="flex rounded-lg border border-border p-0.5 text-sm font-medium">
+              <button
+                onClick={() => setDebtTab("ai")}
+                className={cn(
+                  "rounded-md px-3 py-1 transition",
+                  debtTab === "ai"
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                AI Score
+              </button>
+              <button
+                onClick={() => setDebtTab("sonar")}
+                className={cn(
+                  "rounded-md px-3 py-1 transition",
+                  debtTab === "sonar"
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                SonarQube SQALE
+              </button>
+            </div>
+          </div>
+
+          {debtTab === "ai" && (
+            <>
+              {chartData.length >= 2 ? (
+                <Card className="mt-4 h-64 p-4">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={sonarData.map((p) => ({
-                        date: p.commit_date.slice(0, 10),
-                        sqale: p.sqale_index,
-                        failed: p.build_status === "BUILD_FAILED_SCAN_OK",
-                      }))}
-                      margin={{ top: 8, right: 16, bottom: 0, left: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#6b7280" }} />
-                      <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
-                      <Tooltip formatter={(v: number) => [`${v.toLocaleString()} min`, "SQALE index"]} />
+                    <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: CHART_TICK }} />
+                      <YAxis tick={{ fontSize: 11, fill: CHART_TICK }} />
+                      <Tooltip
+                        contentStyle={{
+                          background: "oklch(0.12 0 0)",
+                          border: "1px solid oklch(1 0 0 / 12%)",
+                          borderRadius: 8,
+                          fontSize: 12,
+                        }}
+                        labelStyle={{ color: "oklch(0.708 0 0)" }}
+                      />
                       <Line
                         type="monotone"
-                        dataKey="sqale"
-                        stroke="#059669"
+                        dataKey="score"
+                        stroke="oklch(0.65 0.19 260)"
                         strokeWidth={2}
-                        dot={{ r: 2 }}
-                        name="SQALE index (min)"
+                        dot={{ r: 3 }}
+                        name="AI debt score (min)"
                       />
                     </LineChart>
                   </ResponsiveContainer>
-                </div>
-                <p className="mt-2 text-xs text-gray-400">
-                  SonarQube SQALE data from dissertation pipeline ·{" "}
-                  {sonarData.length.toLocaleString()} commits ·{" "}
-                  {sonarData.filter((p) => p.build_status === "BUILD_FAILED_SCAN_OK").length} source-only scans
-                </p>
-              </>
-            ) : sonarAvailable === false ? (
-              <p className="mt-4 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400">
-                SonarQube pipeline data not yet available for this repo.
-              </p>
-            ) : (
-              <div className="mt-4 flex items-center justify-center h-16">
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
-              </div>
-            )}
-          </>
-        )}
-      </section>
+                </Card>
+              ) : (
+                <Card className="mt-4 flex flex-col items-center gap-3 border-dashed p-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Analyse with history mode to see debt over time.
+                  </p>
+                  <Button
+                    onClick={handleAnalyseHistory}
+                    disabled={startingHistory || !result.repo_url}
+                    title={result.repo_url ? undefined : "Original repo URL unknown (analysed before URL tracking)"}
+                    size="sm"
+                  >
+                    {startingHistory ? "Starting…" : "Analyse with history mode"}
+                  </Button>
+                </Card>
+              )}
+            </>
+          )}
 
-      {result.churn_data && result.churn_data.top_churned_files.length > 0 && (
-        <section className="mt-10">
-          <h2 className="text-lg font-semibold">Churn hotspots</h2>
-          <p className="mt-1 text-xs text-gray-500">
-            Most frequently changed files across {result.churn_data.total_commits} commits.
-            Hotspot threshold: {result.churn_data.hotspot_threshold}+ changes.
-          </p>
-          <div className="mt-4 overflow-x-auto rounded-xl border border-gray-200">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-                  <th className="px-4 py-3 font-semibold">File</th>
-                  <th className="px-4 py-3 font-semibold">Changes</th>
-                  <th className="px-4 py-3 font-semibold">Authors</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.churn_data.top_churned_files.slice(0, 5).map((f) => (
-                  <tr key={f.path} className="border-b border-gray-100 last:border-0">
-                    <td className="px-4 py-2.5 font-mono text-xs">{f.path}</td>
-                    <td className="px-4 py-2.5">{f.change_count}</td>
-                    <td className="px-4 py-2.5">{f.author_count}</td>
+          {debtTab === "sonar" && (
+            <>
+              {sonarAvailable && sonarData && sonarData.length >= 2 ? (
+                <>
+                  <Card className="mt-4 h-64 p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={sonarData.map((p) => ({
+                          date: p.commit_date.slice(0, 10),
+                          sqale: p.sqale_index,
+                        }))}
+                        margin={{ top: 8, right: 16, bottom: 0, left: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: CHART_TICK }} />
+                        <YAxis tick={{ fontSize: 11, fill: CHART_TICK }} />
+                        <Tooltip
+                          formatter={(value) => [`${Number(value).toLocaleString()} min`, "SQALE index"]}
+                          contentStyle={{
+                            background: "oklch(0.12 0 0)",
+                            border: "1px solid oklch(1 0 0 / 12%)",
+                            borderRadius: 8,
+                            fontSize: 12,
+                          }}
+                          labelStyle={{ color: "oklch(0.708 0 0)" }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="sqale"
+                          stroke="oklch(0.72 0.17 155)"
+                          strokeWidth={2}
+                          dot={{ r: 2 }}
+                          name="SQALE index (min)"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Card>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    SonarQube SQALE data from dissertation pipeline ·{" "}
+                    {sonarData.length.toLocaleString()} commits ·{" "}
+                    {sonarData.filter((p) => p.build_status === "BUILD_FAILED_SCAN_OK").length}{" "}
+                    source-only scans
+                  </p>
+                </>
+              ) : sonarAvailable === false ? (
+                <Card className="mt-4 border-dashed p-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    SonarQube pipeline data not yet available for this repo.
+                  </p>
+                </Card>
+              ) : (
+                <div className="mt-4 flex h-16 items-center justify-center">
+                  <span className="size-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        {result.churn_data && result.churn_data.top_churned_files.length > 0 && (
+          <section className="mt-10">
+            <h2 className="text-lg font-semibold">Churn hotspots</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Most frequently changed files across {result.churn_data.total_commits} commits.
+              Hotspot threshold: {result.churn_data.hotspot_threshold}+ changes.
+            </p>
+            <Card className="mt-4 overflow-x-auto py-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-secondary/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-4 py-3 font-semibold">File</th>
+                    <th className="px-4 py-3 font-semibold">Changes</th>
+                    <th className="px-4 py-3 font-semibold">Authors</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {result.churn_data.top_churned_files.slice(0, 5).map((f) => (
+                    <tr key={f.path} className="border-b border-border/60 last:border-0">
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{f.path}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{f.change_count}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{f.author_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          </section>
+        )}
+
+        <section className="mt-10 pb-16">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">
+              Issues{" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                ({filteredIssues.length} of {result.issues.length})
+              </span>
+            </h2>
+            <div className="flex gap-2">
+              <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v ?? "all")}>
+                <SelectTrigger size="sm" className="w-40">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c.replace(/_/g, " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={severityFilter} onValueChange={(v) => setSeverityFilter(v ?? "all")}>
+                <SelectTrigger size="sm" className="w-36">
+                  <SelectValue placeholder="All severities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All severities</SelectItem>
+                  {SEVERITY_ORDER.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {filteredIssues.map((issue, idx) => (
+              <Card key={idx} className="p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="capitalize">
+                    {issue.category.replace(/_/g, " ")}
+                  </Badge>
+                  <Badge className={cn("capitalize", SEVERITY_BADGE[issue.severity] ?? "bg-secondary")}>
+                    {issue.severity}
+                  </Badge>
+                  {issue.confidence && (
+                    <Badge className={CONFIDENCE_BADGE[issue.confidence] ?? "bg-secondary"}>
+                      {issue.confidence} confidence
+                    </Badge>
+                  )}
+                  <span className="ml-auto text-xs font-semibold text-muted-foreground">
+                    ~{issue.remediation_minutes} min to fix
+                  </span>
+                </div>
+                {issue.location && (
+                  <p className="mt-3 flex items-center gap-1 font-mono text-xs text-muted-foreground">
+                    <Link2 className="size-3" />
+                    {issue.location}
+                  </p>
+                )}
+                <p className="mt-2 text-sm leading-relaxed">{issue.description}</p>
+                {issue.why_debt && (
+                  <p className="mt-2 text-sm italic leading-relaxed text-muted-foreground">
+                    {issue.why_debt}
+                  </p>
+                )}
+                {issue.suggestion && (
+                  <p className="mt-2 text-sm leading-relaxed text-blue-400">
+                    → {issue.suggestion}
+                  </p>
+                )}
+              </Card>
+            ))}
+            {filteredIssues.length === 0 && (
+              <Card className="border-dashed p-6 text-center text-sm text-muted-foreground">
+                No issues match the current filters.
+              </Card>
+            )}
           </div>
         </section>
-      )}
-
-      <section className="mt-10">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">
-            Issues{" "}
-            <span className="text-sm font-normal text-gray-400">
-              ({filteredIssues.length} of {result.issues.length})
-            </span>
-          </h2>
-          <div className="flex gap-2">
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm outline-none focus:border-blue-600"
-            >
-              <option value="all">All categories</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
-            <select
-              value={severityFilter}
-              onChange={(e) => setSeverityFilter(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm outline-none focus:border-blue-600"
-            >
-              <option value="all">All severities</option>
-              {SEVERITY_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-4">
-          {filteredIssues.map((issue, idx) => (
-            <div key={idx} className="rounded-xl border border-gray-200 p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium capitalize text-gray-700">
-                  {issue.category.replace(/_/g, " ")}
-                </span>
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${SEVERITY_BADGE[issue.severity] ?? "bg-gray-200"}`}
-                >
-                  {issue.severity}
-                </span>
-                {issue.confidence && (
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${CONFIDENCE_BADGE[issue.confidence] ?? "bg-gray-100 text-gray-700"}`}
-                  >
-                    {issue.confidence} confidence
-                  </span>
-                )}
-                <span className="ml-auto text-xs font-semibold text-gray-500">
-                  ~{issue.remediation_minutes} min to fix
-                </span>
-              </div>
-              {issue.location && (
-                <p className="mt-3 font-mono text-xs text-gray-500">{issue.location}</p>
-              )}
-              <p className="mt-2 text-sm leading-relaxed">{issue.description}</p>
-              {issue.why_debt && (
-                <p className="mt-2 text-sm italic leading-relaxed text-gray-600">
-                  {issue.why_debt}
-                </p>
-              )}
-              {issue.suggestion && (
-                <p className="mt-2 text-sm leading-relaxed text-blue-700">
-                  → {issue.suggestion}
-                </p>
-              )}
-            </div>
-          ))}
-          {filteredIssues.length === 0 && (
-            <p className="rounded-xl border border-dashed border-gray-300 p-6 text-sm text-gray-500">
-              No issues match the current filters.
-            </p>
-          )}
-        </div>
-      </section>
-    </main>
+      </main>
+    </div>
   );
 }

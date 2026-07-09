@@ -149,6 +149,7 @@ class TechnicalDebtIssue:
     suggestion: str
     confidence: str = "medium"
     why_debt: str = ""
+    is_cross_service_pattern: bool = False
 
 
 @dataclass
@@ -365,21 +366,37 @@ class TechnicalDebtAnalyzer:
     def _dedupe_issues(
         issues: List[TechnicalDebtIssue],
     ) -> Tuple[List[TechnicalDebtIssue], int]:
-        """Drop issues that repeat an identical (location, description) pair.
+        """Deduplicate issues and flag cross-service patterns.
 
-        Gemini occasionally emits the same finding multiple times verbatim
-        (observed repeatedly for the same file/description on larger repos
-        like train-ticket). Keeps the first occurrence, order preserved.
+        True duplicates (identical location AND description) are dropped — these
+        are the same finding emitted twice by the LLM for the same file.
+
+        Cross-service patterns (same description appearing at 2+ distinct locations)
+        are kept in full and marked with is_cross_service_pattern = True, because
+        they represent the same anti-pattern replicated across multiple services —
+        genuine architectural debt that must not be collapsed to a single count.
         """
-        seen: set = set()
+        seen_exact: set = set()
         deduped: List[TechnicalDebtIssue] = []
         for issue in issues:
             key = (issue.location, issue.description)
-            if key in seen:
-                continue
-            seen.add(key)
-            deduped.append(issue)
-        return deduped, len(issues) - len(deduped)
+            if key not in seen_exact:
+                seen_exact.add(key)
+                deduped.append(issue)
+
+        duplicates_removed = len(issues) - len(deduped)
+
+        # Descriptions appearing at 2+ distinct locations are cross-service patterns
+        desc_locs: Dict[str, set] = {}
+        for issue in deduped:
+            desc_locs.setdefault(issue.description, set()).add(issue.location)
+        cross_service_descs = {d for d, locs in desc_locs.items() if len(locs) >= 2}
+
+        for issue in deduped:
+            if issue.description in cross_service_descs:
+                issue.is_cross_service_pattern = True
+
+        return deduped, duplicates_removed
 
     @staticmethod
     def _parse_json(text: str) -> dict:

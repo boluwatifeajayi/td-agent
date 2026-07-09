@@ -82,28 +82,45 @@ class TestTechnicalDebtAnalyzer:
     @patch("td_agent.analyzer.read_file_at_commit", return_value="public class SleuthAnnotationUtils {}")
     def test_duplicate_issues_are_deduplicated(self, mock_read, mock_files, mock_client_cls):
         analyzer = _make_analyzer(mock_client_cls)
-        duplicate_issue = {
+        base_issue = {
             "category": "code_smell",
             "severity": "medium",
             "confidence": "high",
             "remediation_minutes": 20,
             "description": "Method uses reflection unsafely",
-            "location": "src/SleuthAnnotationUtils.java:42",
+            "location": "src/ServiceA.java:42",
             "suggestion": "Avoid reflection",
             "why_debt": "Reflection breaks at runtime with no compile-time safety net.",
         }
-        unique_issue = {**duplicate_issue, "location": "src/Other.java:10", "description": "Different finding"}
+        # True duplicate: identical location + description — must be dropped
+        true_dup = {**base_issue}
+        # Cross-service instance: same description, different location — must be KEPT
+        cross_service_instance = {**base_issue, "location": "src/ServiceB.java:7"}
+        # Unrelated unique issue
+        unique_issue = {**base_issue, "location": "src/Other.java:99", "description": "Different finding"}
+
         llm_data = _fake_llm_response(
-            issues=[duplicate_issue] * 7 + [unique_issue],
+            issues=[true_dup] * 5 + [cross_service_instance, unique_issue],
             files=1,
         )
         analyzer._client.models.generate_content.return_value = _make_gemini_response(llm_data)
 
         result = analyzer.analyze_commit("/fake/repo", _fake_commit())
 
-        assert len(result.issues) == 2
-        assert result.duplicates_removed == 6
-        assert result.ai_debt_score == 40  # 2 issues x 20 min, not 8 x 20
+        # 4 true duplicates removed (5 identical → 1 kept); cross-service and unique are kept
+        assert result.duplicates_removed == 4
+        assert len(result.issues) == 3
+        assert result.ai_debt_score == 60  # 3 issues × 20 min
+
+        # Both "reflection" issues at distinct locations are flagged as cross-service
+        reflection = [i for i in result.issues if i.description == "Method uses reflection unsafely"]
+        assert len(reflection) == 2
+        assert all(i.is_cross_service_pattern for i in reflection)
+
+        # Unique issue is not a cross-service pattern
+        other = [i for i in result.issues if i.description == "Different finding"]
+        assert len(other) == 1
+        assert not other[0].is_cross_service_pattern
 
     @patch("td_agent.analyzer.genai.Client")
     @patch("td_agent.analyzer.get_source_files", return_value=[])

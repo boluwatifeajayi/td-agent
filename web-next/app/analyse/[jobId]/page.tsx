@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { AlertTriangle, Check, Loader2 } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { getJob, type JobStatus } from "@/lib/api";
 
 const STEPS = [
@@ -16,36 +21,6 @@ const STEPS = [
 function stepIndex(stage: string): number {
   const i = STEPS.findIndex((s) => s.key === stage);
   return i === -1 ? 0 : i;
-}
-
-function Tick() {
-  return (
-    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100">
-      <svg className="h-3.5 w-3.5 text-green-700" viewBox="0 0 20 20" fill="currentColor">
-        <path
-          fillRule="evenodd"
-          d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z"
-          clipRule="evenodd"
-        />
-      </svg>
-    </span>
-  );
-}
-
-function Spinner() {
-  return (
-    <span className="flex h-6 w-6 items-center justify-center">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-    </span>
-  );
-}
-
-function Dot() {
-  return (
-    <span className="flex h-6 w-6 items-center justify-center">
-      <span className="h-2 w-2 rounded-full bg-gray-300" />
-    </span>
-  );
 }
 
 export default function ProgressPage() {
@@ -84,10 +59,10 @@ export default function ProgressPage() {
     return (
       <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-6">
         <h1 className="text-xl font-semibold">Job not found</h1>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="mt-2 text-center text-sm text-muted-foreground">
           This job may have expired (job state is in-memory and cleared on API restart).
         </p>
-        <Link href="/" className="mt-6 text-sm font-semibold text-blue-600 hover:underline">
+        <Link href="/" className={cn(buttonVariants({ variant: "outline" }), "mt-6")}>
           ← Back to home
         </Link>
       </main>
@@ -103,61 +78,83 @@ export default function ProgressPage() {
     ? `Analysing commit ${job.progress.current} of ${job.progress.total}`
     : "Analysing with Gemini";
 
+  const progressPct =
+    job?.status === "done"
+      ? 100
+      : Math.round(((activeIdx + (isHistoryAnalysing ? job!.progress.current / job!.progress.total : 0.5)) / STEPS.length) * 100);
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-16">
-      <h1 className="text-2xl font-bold">
-        Analysing{job?.repo_name ? ` ${job.repo_name}` : ""}…
-      </h1>
-      <p className="mt-1 text-sm text-gray-500">
-        This usually takes a minute or two. You can keep this tab open.
-      </p>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-6">
+      <div className="bg-grid pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,black_10%,transparent_70%)]" />
+      <div className="pointer-events-none absolute left-1/2 top-1/3 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-blue-600/15 blur-[110px]" />
 
-      <ol className="mt-10 space-y-5">
-        {STEPS.map((step, i) => {
-          const isDone = i < activeIdx || job?.status === "done";
-          const isActive = i === activeIdx && !failed && job?.status !== "done";
-          return (
-            <li key={step.key} className="flex items-center gap-3">
-              {isDone ? <Tick /> : isActive ? <Spinner /> : <Dot />}
-              <span
-                className={
-                  isDone
-                    ? "text-sm font-medium text-gray-900"
-                    : isActive
-                      ? "text-sm font-medium text-blue-600"
-                      : "text-sm text-gray-400"
-                }
-              >
-                {step.key === "analysing" ? analysingLabel : step.label}
-                {isActive &&
-                  step.key === "analysing" &&
-                  job &&
-                  !isHistoryAnalysing &&
-                  job.progress.total > 1 && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      Commit {job.progress.current} of {job.progress.total}
-                    </span>
+      <Card className="relative z-10 w-full max-w-lg p-8">
+        <h1 className="text-xl font-semibold">
+          Analysing{job?.repo_name ? ` ${job.repo_name}` : ""}…
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          This usually takes a minute or two. You can keep this tab open.
+        </p>
+
+        <Progress value={failed ? 0 : progressPct} className="mt-6" />
+
+        <ol className="mt-8 space-y-4">
+          {STEPS.map((step, i) => {
+            const isDone = i < activeIdx || job?.status === "done";
+            const isActive = i === activeIdx && !failed && job?.status !== "done";
+            return (
+              <li key={step.key} className="flex items-center gap-3">
+                <span
+                  className={`flex size-6 shrink-0 items-center justify-center rounded-full ${
+                    isDone
+                      ? "bg-emerald-500/15 text-emerald-400"
+                      : isActive
+                        ? "bg-blue-500/15 text-blue-400"
+                        : "bg-muted text-muted-foreground/40"
+                  }`}
+                >
+                  {isDone ? (
+                    <Check className="size-3.5" />
+                  ) : isActive ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <span className="size-1.5 rounded-full bg-current" />
                   )}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+                </span>
+                <span
+                  className={
+                    isDone
+                      ? "text-sm font-medium text-foreground"
+                      : isActive
+                        ? "text-sm font-medium text-blue-400"
+                        : "text-sm text-muted-foreground/50"
+                  }
+                >
+                  {step.key === "analysing" ? analysingLabel : step.label}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
 
-      {failed && (
-        <div className="mt-10 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm font-semibold text-red-800">Analysis failed</p>
-          <p className="mt-1 whitespace-pre-wrap break-words text-xs text-red-700">
-            {job?.error ?? "Unknown error"}
-          </p>
-          <Link
-            href="/"
-            className="mt-3 inline-block text-sm font-semibold text-blue-600 hover:underline"
-          >
-            Try again →
-          </Link>
-        </div>
-      )}
-    </main>
+        {failed && (
+          <div className="mt-8 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-red-400">
+              <AlertTriangle className="size-4" />
+              Analysis failed
+            </div>
+            <p className="mt-1 whitespace-pre-wrap break-words text-xs text-red-300/80">
+              {job?.error ?? "Unknown error"}
+            </p>
+            <Link
+              href="/"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-3")}
+            >
+              Try again →
+            </Link>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }
