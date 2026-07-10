@@ -338,29 +338,48 @@ class TechnicalDebtAnalyzer:
         return "".join(parts)
 
     def _call_llm(self, files: List[Tuple[str, str]], commit: CommitInfo) -> dict:
-        """Send files to Gemini and return the parsed JSON response."""
-        self._rate_limiter.wait_if_needed()
+        """Send files to Gemini and return the parsed JSON response.
+
+        Retries up to _MAX_RETRIES times on 503/UNAVAILABLE with exponential
+        backoff, and once on JSON parse failure (LLM formatting artefact).
+        """
         prompt = self._build_prompt(files, commit)
-        response = self._client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=self._generate_config,
-        )
-        if not response.text:
-            raise ValueError("Gemini returned an empty response")
-        try:
-            return self._parse_json(response.text)
-        except json.JSONDecodeError:
-            # Lite models occasionally produce minor formatting artefacts even in JSON
-            # mode; one retry is usually enough to get a clean response.
-            logger.warning("JSON parse failed for %s; retrying once", commit.short_hash)
+
+        _MAX_RETRIES = 5
+        _BACKOFF_BASE = 30  # seconds
+
+        for attempt in range(1, _MAX_RETRIES + 1):
             self._rate_limiter.wait_if_needed()
-            response2 = self._client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config=self._generate_config,
-            )
-            return self._parse_json(response2.text)
+            try:
+                response = self._client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=self._generate_config,
+                )
+            except Exception as exc:
+                err = str(exc)
+                is_503 = "503" in err or "UNAVAILABLE" in err
+                if is_503 and attempt < _MAX_RETRIES:
+                    wait = _BACKOFF_BASE * (2 ** (attempt - 1))
+                    logger.warning(
+                        "Gemini 503 for %s (attempt %d/%d) — retrying in %ds",
+                        commit.short_hash, attempt, _MAX_RETRIES, wait,
+                    )
+                    time.sleep(wait)
+                    continue
+                raise
+
+            if not response.text:
+                raise ValueError("Gemini returned an empty response")
+            try:
+                return self._parse_json(response.text)
+            except json.JSONDecodeError:
+                # Lite models occasionally produce minor formatting artefacts
+                # even in JSON mode; one retry is usually enough.
+                if attempt < _MAX_RETRIES:
+                    logger.warning("JSON parse failed for %s; retrying", commit.short_hash)
+                    continue
+                raise
 
     @staticmethod
     def _dedupe_issues(

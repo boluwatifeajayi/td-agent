@@ -35,7 +35,7 @@ for i in $(seq 1 30); do
 done
 
 # ── 2. Analyse each repo ──────────────────────────────────────────────────────
-declare -A RESULTS  # repo_name → json result blob
+COMPLETED_REPOS=""  # space-separated list of repo names that succeeded
 
 for entry in "${REPOS[@]}"; do
     REPO_NAME="${entry%%|*}"
@@ -52,6 +52,7 @@ for entry in "${REPOS[@]}"; do
     JOB_ID=$(echo "$JOB_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
     echo "  Job ID: $JOB_ID"
 
+    STATUS="unknown"
     # Poll until done or failed
     for i in $(seq 1 120); do
         JOB=$(curl -sf "$API/api/jobs/$JOB_ID")
@@ -64,7 +65,6 @@ for entry in "${REPOS[@]}"; do
         elif [ "$STATUS" = "failed" ]; then
             ERR=$(echo "$JOB" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',''))")
             echo "  FAILED: $ERR" >&2
-            # Don't exit — try the next repo
             break
         fi
         sleep 20
@@ -72,20 +72,19 @@ for entry in "${REPOS[@]}"; do
 
     if [ "$STATUS" != "done" ]; then
         echo "  Skipping $REPO_NAME — did not complete." >&2
-        RESULTS["$REPO_NAME"]=""
         continue
     fi
 
-    RESULT=$(curl -sf "$API/api/results/$REPO_NAME")
-    RESULTS["$REPO_NAME"]="$RESULT"
     echo "  Result fetched."
+    COMPLETED_REPOS="$COMPLETED_REPOS $REPO_NAME"
 done
 
 # ── 3. Append to summary CSV ──────────────────────────────────────────────────
 echo ""
 echo "Updating $SUMMARY_CSV ..."
 
-python3 - "$SUMMARY_CSV" "${!RESULTS[@]}" << 'PYEOF'
+# shellcheck disable=SC2086
+python3 - "$SUMMARY_CSV" $COMPLETED_REPOS << 'PYEOF'
 import sys, csv, json, subprocess
 from pathlib import Path
 
