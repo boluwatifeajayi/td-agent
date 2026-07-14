@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StatCard } from "@/components/dashboard/stat-card";
 import { cn } from "@/lib/utils";
 import {
   getHistory,
@@ -60,28 +61,6 @@ const CONFIDENCE_BADGE: Record<string, string> = {
 const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
 const CHART_GRID = "oklch(1 0 0 / 8%)";
 const CHART_TICK = "oklch(0.708 0 0)";
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card className="p-5">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
-        <Icon className="size-3.5 text-muted-foreground/50" />
-      </div>
-      <p className="mt-1.5 text-3xl font-semibold tabular-nums">{value}</p>
-    </Card>
-  );
-}
 
 export default function ResultsPage() {
   const { repoName } = useParams<{ repoName: string }>();
@@ -196,7 +175,7 @@ export default function ResultsPage() {
     <div className="relative min-h-screen overflow-hidden">
       <div className="bg-grid pointer-events-none absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_80%_40%_at_50%_0%,black_5%,transparent_60%)]" />
 
-      <main className="relative z-10 mx-auto max-w-5xl px-6 py-12">
+      <main className="relative z-10 mx-auto max-w-5xl px-6 py-12 pt-20 lg:pt-12">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <Link
