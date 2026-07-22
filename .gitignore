@@ -44,10 +44,5 @@ ENV/
 htmlcov/
 .mypy_cache/
 
-# Data output (CSVs contain potentially sensitive repo data)
-data/*.csv
-data/*.csv.bak
-data/*.json
-
 # Flask
 instance/

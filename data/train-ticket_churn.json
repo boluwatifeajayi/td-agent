@@ -1,0 +1,56 @@
+{
+  "top_churned_files": [
+    {
+      "path": "README.md",
+      "change_count": 52,
+      "author_count": 9
+    },
+    {
+      "path": "ts-order-other-service/src/main/java/other/controller/OrderOtherController.java",
+      "change_count": 20,
+      "author_count": 8
+    },
+    {
+      "path": "ts-basic-service/src/main/java/fdse/microservice/service/BasicServiceImpl.java",
+      "change_count": 19,
+      "author_count": 7
+    },
+    {
+      "path": "ts-order-service/src/main/java/order/controller/OrderController.java",
+      "change_count": 19,
+      "author_count": 7
+    },
+    {
+      "path": "ts-order-service/src/main/java/order/service/OrderServiceImpl.java",
+      "change_count": 19,
+      "author_count": 8
+    },
+    {
+      "path": "ts-preserve-service/src/main/java/preserve/service/PreserveServiceImpl.java",
+      "change_count": 19,
+      "author_count": 10
+    },
+    {
+      "path": "ts-travel-service/src/main/java/travel/service/TravelServiceImpl.java",
+      "change_count": 19,
+      "author_count": 8
+    },
+    {
+      "path": "ts-travel2-service/src/main/java/travel2/service/Travel2ServiceImpl.java",
+      "change_count": 19,
+      "author_count": 8
+    },
+    {
+      "path": "pom.xml",
+      "change_count": 18,
+      "author_count": 9
+    },
+    {
+      "path": "ts-order-other-service/src/main/java/other/service/OrderOtherServiceImpl.java",
+      "change_count": 18,
+      "author_count": 8
+    }
+  ],
+  "total_commits": 323,
+  "hotspot_threshold": 2
+}

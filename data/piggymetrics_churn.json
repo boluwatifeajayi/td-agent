@@ -1,0 +1,56 @@
+{
+  "top_churned_files": [
+    {
+      "path": "README.md",
+      "change_count": 67,
+      "author_count": 10
+    },
+    {
+      "path": "docker-compose.yml",
+      "change_count": 18,
+      "author_count": 3
+    },
+    {
+      "path": "statistics-service/pom.xml",
+      "change_count": 18,
+      "author_count": 5
+    },
+    {
+      "path": "account-service/pom.xml",
+      "change_count": 17,
+      "author_count": 5
+    },
+    {
+      "path": "pom.xml",
+      "change_count": 17,
+      "author_count": 4
+    },
+    {
+      "path": "src/main/java/com/piggymetrics/controllers/AppController.java",
+      "change_count": 16,
+      "author_count": 3
+    },
+    {
+      "path": ".travis.yml",
+      "change_count": 15,
+      "author_count": 4
+    },
+    {
+      "path": "auth-service/pom.xml",
+      "change_count": 15,
+      "author_count": 5
+    },
+    {
+      "path": "src/main/java/com/piggymetrics/controllers/UserController.java",
+      "change_count": 15,
+      "author_count": 3
+    },
+    {
+      "path": "docker-compose.dev.yml",
+      "change_count": 13,
+      "author_count": 2
+    }
+  ],
+  "total_commits": 290,
+  "hotspot_threshold": 4
+}
