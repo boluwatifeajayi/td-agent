@@ -7,12 +7,12 @@
     },
     {
       "path": "src/pom.xml",
-      "change_count": 261,
+      "change_count": 262,
       "author_count": 5
     },
     {
       "path": "config",
-      "change_count": 137,
+      "change_count": 138,
       "author_count": 4
     },
     {
@@ -22,7 +22,7 @@
     },
     {
       "path": "compose/.env",
-      "change_count": 96,
+      "change_count": 97,
       "author_count": 1
     },
     {
@@ -51,6 +51,6 @@
       "author_count": 2
     }
   ],
-  "total_commits": 2247,
+  "total_commits": 2248,
   "hotspot_threshold": 4
 }
