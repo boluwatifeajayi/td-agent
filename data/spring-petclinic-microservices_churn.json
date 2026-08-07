@@ -1,0 +1,56 @@
+{
+  "top_churned_files": [
+    {
+      "path": "pom.xml",
+      "change_count": 238,
+      "author_count": 23
+    },
+    {
+      "path": "spring-petclinic-api-gateway/pom.xml",
+      "change_count": 79,
+      "author_count": 15
+    },
+    {
+      "path": "README.md",
+      "change_count": 70,
+      "author_count": 18
+    },
+    {
+      "path": "spring-petclinic-vets-service/pom.xml",
+      "change_count": 65,
+      "author_count": 13
+    },
+    {
+      "path": "spring-petclinic-customers-service/pom.xml",
+      "change_count": 64,
+      "author_count": 13
+    },
+    {
+      "path": "spring-petclinic-visits-service/pom.xml",
+      "change_count": 63,
+      "author_count": 13
+    },
+    {
+      "path": "spring-petclinic-discovery-server/pom.xml",
+      "change_count": 52,
+      "author_count": 9
+    },
+    {
+      "path": "spring-petclinic-config-server/pom.xml",
+      "change_count": 51,
+      "author_count": 9
+    },
+    {
+      "path": "spring-petclinic-admin-server/pom.xml",
+      "change_count": 50,
+      "author_count": 10
+    },
+    {
+      "path": "readme.md",
+      "change_count": 34,
+      "author_count": 7
+    }
+  ],
+  "total_commits": 758,
+  "hotspot_threshold": 2
+}

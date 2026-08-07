@@ -1,0 +1,56 @@
+{
+  "top_churned_files": [
+    {
+      "path": "pom.xml",
+      "change_count": 637,
+      "author_count": 18
+    },
+    {
+      "path": "client/pom.xml",
+      "change_count": 280,
+      "author_count": 8
+    },
+    {
+      "path": "server/pom.xml",
+      "change_count": 274,
+      "author_count": 5
+    },
+    {
+      "path": "security/pom.xml",
+      "change_count": 272,
+      "author_count": 3
+    },
+    {
+      "path": "audit/pom.xml",
+      "change_count": 269,
+      "author_count": 6
+    },
+    {
+      "path": "utility/pom.xml",
+      "change_count": 269,
+      "author_count": 3
+    },
+    {
+      "path": "config/pom.xml",
+      "change_count": 266,
+      "author_count": 4
+    },
+    {
+      "path": "info/pom.xml",
+      "change_count": 265,
+      "author_count": 3
+    },
+    {
+      "path": "mask/pom.xml",
+      "change_count": 263,
+      "author_count": 5
+    },
+    {
+      "path": "status/pom.xml",
+      "change_count": 260,
+      "author_count": 6
+    }
+  ],
+  "total_commits": 2958,
+  "hotspot_threshold": 6
+}

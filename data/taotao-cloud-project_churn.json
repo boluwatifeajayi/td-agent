@@ -1,0 +1,56 @@
+{
+  "top_churned_files": [
+    {
+      "path": "build.gradle",
+      "change_count": 431,
+      "author_count": 3
+    },
+    {
+      "path": "README.md",
+      "change_count": 289,
+      "author_count": 2
+    },
+    {
+      "path": "taotao-cloud-microservice/taotao-cloud-data-sync/build.gradle",
+      "change_count": 198,
+      "author_count": 2
+    },
+    {
+      "path": "taotao-cloud-microservice/taotao-cloud-business/taotao-cloud-sys/taotao-cloud-sys-biz/build.gradle",
+      "change_count": 192,
+      "author_count": 2
+    },
+    {
+      "path": "taotao-cloud-microservice/taotao-cloud-business/taotao-cloud-message/taotao-cloud-message-biz/build.gradle",
+      "change_count": 189,
+      "author_count": 2
+    },
+    {
+      "path": "taotao-cloud-microservice/taotao-cloud-business/taotao-cloud-auth/taotao-cloud-auth-biz/build.gradle",
+      "change_count": 181,
+      "author_count": 2
+    },
+    {
+      "path": "taotao-cloud-microservice/taotao-cloud-sys/taotao-cloud-sys-biz/src/main/resources/application-dev.yml",
+      "change_count": 170,
+      "author_count": 1
+    },
+    {
+      "path": "taotao-cloud-bigdata/taotao-cloud-flink/build.gradle",
+      "change_count": 159,
+      "author_count": 2
+    },
+    {
+      "path": "taotao-cloud-microservice/taotao-cloud-gateway/build.gradle",
+      "change_count": 149,
+      "author_count": 3
+    },
+    {
+      "path": "taotao-cloud-microservice/taotao-cloud-data-analysis/build.gradle",
+      "change_count": 146,
+      "author_count": 2
+    }
+  ],
+  "total_commits": 3335,
+  "hotspot_threshold": 2
+}

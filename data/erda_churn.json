@@ -1,0 +1,56 @@
+{
+  "top_churned_files": [
+    {
+      "path": "go.sum",
+      "change_count": 390,
+      "author_count": 33
+    },
+    {
+      "path": "go.mod",
+      "change_count": 385,
+      "author_count": 36
+    },
+    {
+      "path": "erda.yml",
+      "change_count": 147,
+      "author_count": 23
+    },
+    {
+      "path": ".github/workflows/ci-it.yml",
+      "change_count": 83,
+      "author_count": 19
+    },
+    {
+      "path": "Makefile",
+      "change_count": 71,
+      "author_count": 19
+    },
+    {
+      "path": "modules/dop/initialize.go",
+      "change_count": 71,
+      "author_count": 12
+    },
+    {
+      "path": "modules/cmp/component-protocol/components/cmp-dashboard-events-list/eventTable/render.go",
+      "change_count": 62,
+      "author_count": 3
+    },
+    {
+      "path": "modules/dop/component-protocol/components/release-manage/releaseTable/render.go",
+      "change_count": 59,
+      "author_count": 4
+    },
+    {
+      "path": "cmd/erda-server/bootstrap.yaml",
+      "change_count": 58,
+      "author_count": 11
+    },
+    {
+      "path": "conf/dop/dop.yaml",
+      "change_count": 57,
+      "author_count": 9
+    }
+  ],
+  "total_commits": 4605,
+  "hotspot_threshold": 3
+}

@@ -1,0 +1,56 @@
+{
+  "top_churned_files": [
+    {
+      "path": "src/emailservice/requirements.txt",
+      "change_count": 262,
+      "author_count": 16
+    },
+    {
+      "path": "src/recommendationservice/requirements.txt",
+      "change_count": 255,
+      "author_count": 16
+    },
+    {
+      "path": "src/loadgenerator/requirements.txt",
+      "change_count": 214,
+      "author_count": 12
+    },
+    {
+      "path": "src/currencyservice/package-lock.json",
+      "change_count": 189,
+      "author_count": 10
+    },
+    {
+      "path": "src/paymentservice/package-lock.json",
+      "change_count": 182,
+      "author_count": 10
+    },
+    {
+      "path": "src/adservice/build.gradle",
+      "change_count": 181,
+      "author_count": 13
+    },
+    {
+      "path": "src/currencyservice/package.json",
+      "change_count": 171,
+      "author_count": 14
+    },
+    {
+      "path": "src/paymentservice/package.json",
+      "change_count": 164,
+      "author_count": 14
+    },
+    {
+      "path": "src/frontend/go.mod",
+      "change_count": 162,
+      "author_count": 10
+    },
+    {
+      "path": "src/frontend/go.sum",
+      "change_count": 161,
+      "author_count": 10
+    }
+  ],
+  "total_commits": 2645,
+  "hotspot_threshold": 9
+}

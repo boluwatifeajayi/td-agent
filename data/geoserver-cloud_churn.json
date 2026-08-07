@@ -1,0 +1,56 @@
+{
+  "top_churned_files": [
+    {
+      "path": "pom.xml",
+      "change_count": 306,
+      "author_count": 3
+    },
+    {
+      "path": "src/pom.xml",
+      "change_count": 261,
+      "author_count": 5
+    },
+    {
+      "path": "config",
+      "change_count": 137,
+      "author_count": 4
+    },
+    {
+      "path": "README.md",
+      "change_count": 122,
+      "author_count": 8
+    },
+    {
+      "path": "compose/.env",
+      "change_count": 96,
+      "author_count": 1
+    },
+    {
+      "path": ".env",
+      "change_count": 85,
+      "author_count": 2
+    },
+    {
+      "path": "docker-compose.yml",
+      "change_count": 83,
+      "author_count": 3
+    },
+    {
+      "path": "docs/index.md",
+      "change_count": 81,
+      "author_count": 3
+    },
+    {
+      "path": "docs/deploy/podman/traditional/manual/podman.md",
+      "change_count": 74,
+      "author_count": 4
+    },
+    {
+      "path": "docs/deploy/docker-compose/stable/jdbcconfig/docker-compose.yml",
+      "change_count": 71,
+      "author_count": 2
+    }
+  ],
+  "total_commits": 2247,
+  "hotspot_threshold": 4
+}

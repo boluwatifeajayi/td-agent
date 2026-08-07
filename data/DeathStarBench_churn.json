@@ -1,0 +1,56 @@
+{
+  "top_churned_files": [
+    {
+      "path": "README.md",
+      "change_count": 30,
+      "author_count": 2
+    },
+    {
+      "path": "socialNetwork/README.md",
+      "change_count": 22,
+      "author_count": 11
+    },
+    {
+      "path": "hotelReservation/docker-compose.yml",
+      "change_count": 21,
+      "author_count": 13
+    },
+    {
+      "path": "hotelReservation/services/reservation/server.go",
+      "change_count": 20,
+      "author_count": 10
+    },
+    {
+      "path": "socialNetwork/docker-compose.yml",
+      "change_count": 20,
+      "author_count": 7
+    },
+    {
+      "path": "hotelReservation/services/rate/server.go",
+      "change_count": 19,
+      "author_count": 9
+    },
+    {
+      "path": "hotelReservation/services/frontend/server.go",
+      "change_count": 18,
+      "author_count": 9
+    },
+    {
+      "path": "hotelReservation/services/profile/server.go",
+      "change_count": 18,
+      "author_count": 9
+    },
+    {
+      "path": "hotelReservation/cmd/frontend/main.go",
+      "change_count": 17,
+      "author_count": 10
+    },
+    {
+      "path": "hotelReservation/go.mod",
+      "change_count": 16,
+      "author_count": 4
+    }
+  ],
+  "total_commits": 599,
+  "hotspot_threshold": 2
+}

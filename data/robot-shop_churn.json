@@ -1,0 +1,56 @@
+{
+  "top_churned_files": [
+    {
+      "path": ".env",
+      "change_count": 46,
+      "author_count": 4
+    },
+    {
+      "path": "README.md",
+      "change_count": 34,
+      "author_count": 8
+    },
+    {
+      "path": "docker-compose.yaml",
+      "change_count": 27,
+      "author_count": 3
+    },
+    {
+      "path": "payment/payment.py",
+      "change_count": 23,
+      "author_count": 3
+    },
+    {
+      "path": "web/static/js/controller.js",
+      "change_count": 20,
+      "author_count": 2
+    },
+    {
+      "path": "cart/server.js",
+      "change_count": 16,
+      "author_count": 3
+    },
+    {
+      "path": "payment/Dockerfile",
+      "change_count": 15,
+      "author_count": 4
+    },
+    {
+      "path": "web/Dockerfile",
+      "change_count": 15,
+      "author_count": 6
+    },
+    {
+      "path": "load-gen/load-gen.sh",
+      "change_count": 14,
+      "author_count": 1
+    },
+    {
+      "path": "K8s/descriptors/mysql-deployment.yaml",
+      "change_count": 13,
+      "author_count": 3
+    }
+  ],
+  "total_commits": 377,
+  "hotspot_threshold": 3
+}
