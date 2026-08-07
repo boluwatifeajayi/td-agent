@@ -19,10 +19,17 @@ def _setup_logging(verbose: bool) -> None:
     )
 
 
+_PROVIDER_ENV_VARS = {"gemini": "GEMINI_API_KEY", "claude": "ANTHROPIC_API_KEY"}
+_PROVIDER_KEY_HELP = {
+    "gemini": "Get a free key at https://aistudio.google.com and add it to .env.",
+    "claude": "Get a key at https://console.anthropic.com and add it to .env.",
+}
+
+
 @click.group()
 @click.version_option("0.1.0", prog_name="td-agent")
 def main() -> None:
-    """TD Agent — AI-powered technical debt detection using Claude."""
+    """TD Agent — AI-powered technical debt detection using Gemini or Claude."""
 
 
 @main.command()
@@ -34,10 +41,12 @@ def main() -> None:
               help="Test mode: analyse only the latest commit and print a detailed report")
 @click.option("--output-dir", type=click.Path(), default=None,
               help="Directory for CSV output (default: <project>/data/)")
-@click.option("--model", default=None, hidden=True, help="Override the Claude model")
+@click.option("--provider", type=click.Choice(["gemini", "claude"]), default="gemini", show_default=True,
+              help="LLM provider to use for analysis")
+@click.option("--model", default=None, help="Override the provider's default model")
 @click.option("-v", "--verbose", is_flag=True, default=False)
-def analyze(repo, sample_every, commits, test_mode, output_dir, model, verbose) -> None:
-    """Analyse a git repository for technical debt using Claude."""
+def analyze(repo, sample_every, commits, test_mode, output_dir, provider, model, verbose) -> None:
+    """Analyse a git repository for technical debt using an LLM provider."""
     _setup_logging(verbose)
 
     from .analyzer import TechnicalDebtAnalyzer
@@ -45,11 +54,10 @@ def analyze(repo, sample_every, commits, test_mode, output_dir, model, verbose) 
     from .report import save_results
     from .sampler import sample_every_n, sample_evenly, sample_latest
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
+    api_key_var = _PROVIDER_ENV_VARS[provider]
+    if not os.environ.get(api_key_var):
         click.echo(
-            "Error: GEMINI_API_KEY not set.\n"
-            "Get a free key at https://aistudio.google.com and add it to .env.",
+            f"Error: {api_key_var} not set.\n{_PROVIDER_KEY_HELP[provider]}",
             err=True,
         )
         sys.exit(1)
@@ -82,10 +90,11 @@ def analyze(repo, sample_every, commits, test_mode, output_dir, model, verbose) 
         click.echo("No commits to analyse.")
         sys.exit(0)
 
-    kwargs = {}
+    kwargs = {"provider": provider}
     if model:
         kwargs["model"] = model
     analyzer = TechnicalDebtAnalyzer(**kwargs)
+    click.echo(f"Provider   : {provider} ({analyzer.model})")
     results = []
 
     for i, commit in enumerate(sampled, 1):

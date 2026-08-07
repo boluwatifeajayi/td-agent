@@ -12,7 +12,7 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Dict, Literal, Optional
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -25,7 +25,13 @@ load_dotenv(_ROOT / ".env")
 
 from td_agent.analyzer import TechnicalDebtAnalyzer  # noqa: E402
 from td_agent.git_utils import get_churn_data, get_commits  # noqa: E402
-from td_agent.report import list_analyzed_repos, load_results, save_results  # noqa: E402
+from td_agent.report import (  # noqa: E402
+    average_confidence,
+    list_analyzed_repos,
+    load_results,
+    provider_from_model,
+    save_results,
+)
 from td_agent.sampler import sample_evenly, sample_latest  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s — %(message)s")
@@ -50,6 +56,7 @@ _jobs: dict = {}
 class AnalyseRequest(BaseModel):
     repo_url: str
     mode: Literal["latest", "history"] = "latest"
+    provider: Literal["gemini", "claude"] = "gemini"
 
 
 def _repo_name_from_url(url: str) -> str:
@@ -73,7 +80,7 @@ def _meta_path(repo_name: str) -> Path:
     return DATA_DIR / f"{repo_name}_meta.json"
 
 
-def _run_analysis_job(job_id: str, repo_url: str, mode: str) -> None:
+def _run_analysis_job(job_id: str, repo_url: str, mode: str, provider: str) -> None:
     job = _jobs[job_id]
     job["status"] = "running"
     repo_name = _repo_name_from_url(repo_url)
@@ -103,11 +110,14 @@ def _run_analysis_job(job_id: str, repo_url: str, mode: str) -> None:
             sampled = sample_latest(all_commits)
 
         # 4. Analyse
-        analyzer = TechnicalDebtAnalyzer()
+        analyzer = TechnicalDebtAnalyzer(provider=provider)
         results = []
         for i, commit in enumerate(sampled, 1):
             _set_progress(job_id, "analysing", current=i, total=len(sampled))
-            logger.info("[%s] analysing %s (%d/%d)", repo_name, commit.short_hash, i, len(sampled))
+            logger.info(
+                "[%s] analysing %s (%d/%d) with %s",
+                repo_name, commit.short_hash, i, len(sampled), analyzer.model,
+            )
             results.append(analyzer.analyze_commit(clone_path, commit))
 
         errors = [r.analysis_error for r in results if r.analysis_error]
@@ -146,8 +156,9 @@ def analyse(req: AnalyseRequest, background_tasks: BackgroundTasks):
         "repo_url": req.repo_url,
         "repo_name": _repo_name_from_url(req.repo_url),
         "mode": req.mode,
+        "provider": req.provider,
     }
-    background_tasks.add_task(_run_analysis_job, job_id, req.repo_url, req.mode)
+    background_tasks.add_task(_run_analysis_job, job_id, req.repo_url, req.mode, req.provider)
     return {"job_id": job_id}
 
 
@@ -163,6 +174,7 @@ def job_status(job_id: str):
         "error": job["error"],
         "repo_name": job["repo_name"],
         "mode": job["mode"],
+        "provider": job.get("provider", "gemini"),
     }
 
 
@@ -175,6 +187,24 @@ def _load_json(path: Path) -> Optional[dict]:
         return None
 
 
+def _top_category(category_breakdown: dict) -> Optional[str]:
+    if not category_breakdown:
+        return None
+    return max(category_breakdown.items(), key=lambda kv: kv[1])[0]
+
+
+def _comparison_entry(row: dict) -> dict:
+    return {
+        "model": row.get("model", ""),
+        "ai_debt_score": row["ai_debt_score"],
+        "issue_count": row["issue_count"],
+        "top_category": _top_category(row["category_breakdown"]),
+        "severity_breakdown": row["severity_breakdown"],
+        "avg_confidence": average_confidence(row["issues"]),
+        "commit_date": row["commit_date"],
+    }
+
+
 @app.get("/api/results/{repo_name}")
 def results(repo_name: str):
     rows = load_results(repo_name, DATA_DIR)
@@ -182,6 +212,19 @@ def results(repo_name: str):
         raise HTTPException(status_code=404, detail=f"No results for '{repo_name}'")
     latest = rows[-1]  # load_results sorts oldest → newest
     meta = _load_json(_meta_path(repo_name)) or {}
+
+    # Latest row per provider (rows are oldest→newest, so the last write per
+    # provider wins) — powers the Gemini-vs-Claude comparison card when both
+    # have analysed this repo.
+    by_provider: Dict[str, dict] = {}
+    for r in rows:
+        by_provider[provider_from_model(r.get("model", ""))] = r
+    comparison = (
+        {p: _comparison_entry(r) for p, r in by_provider.items()}
+        if len(by_provider) > 1
+        else None
+    )
+
     return {
         "repo_name": repo_name,
         "repo_url": meta.get("repo_url"),
@@ -192,6 +235,7 @@ def results(repo_name: str):
             "message": latest["commit_message"],
         },
         "model": latest.get("model", ""),
+        "provider": provider_from_model(latest.get("model", "")),
         "ai_debt_score": latest["ai_debt_score"],
         "issue_count": latest["issue_count"],
         "files_analyzed": latest["files_analyzed"],
@@ -199,9 +243,11 @@ def results(repo_name: str):
         "category_breakdown": latest["category_breakdown"],
         "severity_breakdown": latest["severity_breakdown"],
         "issues": latest["issues"],
+        "avg_confidence": average_confidence(latest["issues"]),
         "duplicates_removed": latest.get("duplicates_removed", 0),
         "churn_data": _load_json(_churn_path(repo_name)),
         "commits_analyzed": len(rows),
+        "comparison": comparison,
     }
 
 
@@ -279,6 +325,7 @@ def repos():
             "issue_count": latest["issue_count"],
             "last_analysed": latest["commit_date"][:10],
             "model": latest.get("model", ""),
+            "provider": provider_from_model(latest.get("model", "")),
             "commit_count": len(rows),
         })
     return out

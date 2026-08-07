@@ -7,12 +7,14 @@ export function StatCard({
   icon: Icon,
   hint,
   accent,
+  badge,
 }: {
   label: string;
   value: string | number;
   icon: React.ComponentType<{ className?: string }>;
   hint?: string;
   accent?: string;
+  badge?: React.ReactNode;
 }) {
   return (
     <Card className="p-5">
@@ -23,6 +25,7 @@ export function StatCard({
         <Icon className={cn("size-3.5 text-muted-foreground/50", accent)} />
       </div>
       <p className="mt-1.5 text-3xl font-semibold tabular-nums">{value}</p>
+      {badge && <div className="mt-1.5">{badge}</div>}
       {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
     </Card>
   );

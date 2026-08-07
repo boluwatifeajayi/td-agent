@@ -1,6 +1,13 @@
-"""Unit tests for TechnicalDebtAnalyzer with mocked Gemini client."""
+"""Unit tests for TechnicalDebtAnalyzer with a mocked LLM provider.
 
-import json
+Provider-specific behaviour (client construction, rate limiting, retries,
+raw-response parsing) is covered separately in test_gemini_provider.py and
+test_claude_provider.py — these tests only exercise analyzer.py's own logic
+(file selection, prioritisation, dedup, error capture) against the
+LLMProvider interface, so they stay valid regardless of which provider is
+plugged in.
+"""
+
 import os
 from datetime import datetime
 from unittest.mock import MagicMock, patch
@@ -25,26 +32,21 @@ def _fake_llm_response(issues: list, assessment: str = "OK", files: int = 5) -> 
     return {"issues": issues, "overall_assessment": assessment, "files_analyzed": files}
 
 
-def _make_gemini_response(response_dict: dict) -> MagicMock:
-    """Build a mock Gemini response whose .text is the JSON-serialised dict."""
-    mock_resp = MagicMock()
-    mock_resp.text = json.dumps(response_dict)
-    return mock_resp
-
-
-def _make_analyzer(mock_genai_client_cls, api_key: str = "test-key") -> TechnicalDebtAnalyzer:
-    """Construct an analyzer with a mocked genai.Client."""
-    mock_genai_client_cls.return_value = MagicMock()
+def _make_analyzer(mock_get_provider, api_key: str = "test-key") -> TechnicalDebtAnalyzer:
+    """Construct an analyzer with a mocked LLMProvider (analyze() returns parsed dicts)."""
+    mock_provider = MagicMock()
+    mock_provider.model = "gemini-2.5-flash-lite"
+    mock_get_provider.return_value = mock_provider
     return TechnicalDebtAnalyzer(api_key=api_key)
 
 
 class TestTechnicalDebtAnalyzer:
 
-    @patch("td_agent.analyzer.genai.Client")
+    @patch("td_agent.analyzer.get_provider")
     @patch("td_agent.analyzer.get_source_files", return_value=["src/Foo.java", "src/Bar.java"])
     @patch("td_agent.analyzer.read_file_at_commit", return_value="public class Foo {}")
-    def test_successful_analysis(self, mock_read, mock_files, mock_client_cls):
-        analyzer = _make_analyzer(mock_client_cls)
+    def test_successful_analysis(self, mock_read, mock_files, mock_get_provider):
+        analyzer = _make_analyzer(mock_get_provider)
         llm_data = _fake_llm_response(
             issues=[
                 {
@@ -67,7 +69,7 @@ class TestTechnicalDebtAnalyzer:
             assessment="Moderate debt, manageable.",
             files=2,
         )
-        analyzer._client.models.generate_content.return_value = _make_gemini_response(llm_data)
+        analyzer._provider.analyze.return_value = llm_data
 
         result = analyzer.analyze_commit("/fake/repo", _fake_commit())
 
@@ -76,12 +78,13 @@ class TestTechnicalDebtAnalyzer:
         assert len(result.issues) == 2
         assert result.analysis_error is None
         assert result.overall_assessment == "Moderate debt, manageable."
+        assert result.model == "gemini-2.5-flash-lite"
 
-    @patch("td_agent.analyzer.genai.Client")
+    @patch("td_agent.analyzer.get_provider")
     @patch("td_agent.analyzer.get_source_files", return_value=["src/SleuthAnnotationUtils.java"])
     @patch("td_agent.analyzer.read_file_at_commit", return_value="public class SleuthAnnotationUtils {}")
-    def test_duplicate_issues_are_deduplicated(self, mock_read, mock_files, mock_client_cls):
-        analyzer = _make_analyzer(mock_client_cls)
+    def test_duplicate_issues_are_deduplicated(self, mock_read, mock_files, mock_get_provider):
+        analyzer = _make_analyzer(mock_get_provider)
         base_issue = {
             "category": "code_smell",
             "severity": "medium",
@@ -103,7 +106,7 @@ class TestTechnicalDebtAnalyzer:
             issues=[true_dup] * 5 + [cross_service_instance, unique_issue],
             files=1,
         )
-        analyzer._client.models.generate_content.return_value = _make_gemini_response(llm_data)
+        analyzer._provider.analyze.return_value = llm_data
 
         result = analyzer.analyze_commit("/fake/repo", _fake_commit())
 
@@ -122,22 +125,23 @@ class TestTechnicalDebtAnalyzer:
         assert len(other) == 1
         assert not other[0].is_cross_service_pattern
 
-    @patch("td_agent.analyzer.genai.Client")
+    @patch("td_agent.analyzer.get_provider")
     @patch("td_agent.analyzer.get_source_files", return_value=[])
-    def test_no_source_files_returns_zero_score(self, mock_files, mock_client_cls):
-        analyzer = _make_analyzer(mock_client_cls)
+    def test_no_source_files_returns_zero_score(self, mock_files, mock_get_provider):
+        analyzer = _make_analyzer(mock_get_provider)
         result = analyzer.analyze_commit("/fake/repo", _fake_commit())
 
         assert result.ai_debt_score == 0
         assert result.issues == []
         assert result.analysis_error is None
+        analyzer._provider.analyze.assert_not_called()
 
-    @patch("td_agent.analyzer.genai.Client")
+    @patch("td_agent.analyzer.get_provider")
     @patch("td_agent.analyzer.get_source_files", return_value=["src/Main.py"])
     @patch("td_agent.analyzer.read_file_at_commit", return_value="x = 1")
-    def test_llm_error_captured(self, mock_read, mock_files, mock_client_cls):
-        analyzer = _make_analyzer(mock_client_cls)
-        analyzer._client.models.generate_content.side_effect = Exception("API rate limit")
+    def test_llm_error_captured(self, mock_read, mock_files, mock_get_provider):
+        analyzer = _make_analyzer(mock_get_provider)
+        analyzer._provider.analyze.side_effect = Exception("API rate limit")
 
         result = analyzer.analyze_commit("/fake/repo", _fake_commit())
 
@@ -177,24 +181,23 @@ class TestTechnicalDebtAnalyzer:
         )
         assert result.severity_breakdown == {"low": 1, "high": 2}
 
-    @patch("td_agent.analyzer.genai.Client")
+    @patch("td_agent.analyzer.get_provider")
     @patch("td_agent.analyzer.get_source_files",
            return_value=[f"src/file_{i}.py" for i in range(200)])
     @patch("td_agent.analyzer.read_file_at_commit", return_value="x = 1")
-    def test_file_count_capped(self, mock_read, mock_files, mock_client_cls):
-        analyzer = _make_analyzer(mock_client_cls)
-        llm_data = _fake_llm_response(issues=[], files=analyzer.MAX_FILES)
-        analyzer._client.models.generate_content.return_value = _make_gemini_response(llm_data)
+    def test_file_count_capped(self, mock_read, mock_files, mock_get_provider):
+        analyzer = _make_analyzer(mock_get_provider)
+        analyzer._provider.analyze.return_value = _fake_llm_response(issues=[], files=analyzer.MAX_FILES)
 
         result = analyzer.analyze_commit("/fake/repo", _fake_commit())
 
         assert result.analysis_error is None
         # 200 unique candidates, capped at MAX_FILES → the rest are skipped
         assert result.files_skipped == 200 - analyzer.MAX_FILES
-        # Confirm generate_content was called exactly once (all files batched in one call)
-        analyzer._client.models.generate_content.assert_called_once()
+        # Confirm analyze() was called exactly once (all files batched in one call)
+        analyzer._provider.analyze.assert_called_once()
 
-    @patch("td_agent.analyzer.genai.Client")
+    @patch("td_agent.analyzer.get_provider")
     @patch("td_agent.analyzer.get_source_files", return_value=[
         "src/util.py",
         "src/auth/login.py",
@@ -205,14 +208,13 @@ class TestTechnicalDebtAnalyzer:
         "dist/bundle.js",
     ])
     @patch("td_agent.analyzer.read_file_at_commit", return_value="x = 1")
-    def test_prioritization_and_exclusions(self, mock_read, mock_files, mock_client_cls):
-        analyzer = _make_analyzer(mock_client_cls)
-        llm_data = _fake_llm_response(issues=[], files=3)
-        analyzer._client.models.generate_content.return_value = _make_gemini_response(llm_data)
+    def test_prioritization_and_exclusions(self, mock_read, mock_files, mock_get_provider):
+        analyzer = _make_analyzer(mock_get_provider)
+        analyzer._provider.analyze.return_value = _fake_llm_response(issues=[], files=3)
 
         analyzer.analyze_commit("/fake/repo", _fake_commit())
 
-        prompt = analyzer._client.models.generate_content.call_args.kwargs["contents"]
+        prompt = analyzer._provider.analyze.call_args.args[0]
         # Excluded files never reach the prompt
         assert "package-lock.json" not in prompt
         assert "schema_pb2.py" not in prompt
@@ -226,22 +228,19 @@ class TestTechnicalDebtAnalyzer:
         util_pos = prompt.index("src/util.py")
         assert auth_pos < main_pos < util_pos
 
-    @patch("td_agent.analyzer.genai.Client")
+    @patch("td_agent.analyzer.get_provider")
     @patch("td_agent.analyzer.get_source_files", return_value=["src/A.py"])
     @patch("td_agent.analyzer.read_file_at_commit", return_value="x = 1")
-    def test_empty_response_raises_error(self, mock_read, mock_files, mock_client_cls):
-        analyzer = _make_analyzer(mock_client_cls)
-        empty_resp = MagicMock()
-        empty_resp.text = ""
-        analyzer._client.models.generate_content.return_value = empty_resp
+    def test_provider_error_captured_as_analysis_error(self, mock_read, mock_files, mock_get_provider):
+        analyzer = _make_analyzer(mock_get_provider)
+        analyzer._provider.analyze.side_effect = ValueError("provider returned an empty response")
 
         result = analyzer.analyze_commit("/fake/repo", _fake_commit())
 
         assert result.analysis_error is not None
         assert "empty" in result.analysis_error.lower()
 
-    @patch("td_agent.analyzer.genai.Client")
-    def test_missing_api_key_raises(self, mock_client_cls):
+    def test_missing_api_key_raises(self):
         original = os.environ.pop("GEMINI_API_KEY", None)
         try:
             with pytest.raises(ValueError, match="GEMINI_API_KEY"):
@@ -249,3 +248,19 @@ class TestTechnicalDebtAnalyzer:
         finally:
             if original is not None:
                 os.environ["GEMINI_API_KEY"] = original
+
+    @patch("td_agent.analyzer.get_provider")
+    def test_provider_selection_is_delegated(self, mock_get_provider):
+        """analyzer.py must not hardcode a provider — selection is entirely get_provider()'s job."""
+        mock_provider = MagicMock()
+        mock_provider.model = "claude-sonnet-4-5"
+        mock_get_provider.return_value = mock_provider
+
+        analyzer = TechnicalDebtAnalyzer(provider="claude", api_key="test-key", model="claude-sonnet-4-5")
+
+        mock_get_provider.assert_called_once()
+        _, kwargs = mock_get_provider.call_args
+        assert mock_get_provider.call_args.args[0] == "claude"
+        assert kwargs["api_key"] == "test-key"
+        assert kwargs["model"] == "claude-sonnet-4-5"
+        assert analyzer.model == "claude-sonnet-4-5"

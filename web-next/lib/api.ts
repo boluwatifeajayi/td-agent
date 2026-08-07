@@ -1,12 +1,15 @@
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+export type Provider = "gemini" | "claude";
+
 export interface RepoSummary {
   name: string;
   latest_score: number;
   issue_count: number;
   last_analysed: string;
   model: string;
+  provider: Provider | "unknown";
   commit_count: number;
 }
 
@@ -17,6 +20,7 @@ export interface JobStatus {
   error: string | null;
   repo_name: string;
   mode: "latest" | "history";
+  provider: Provider;
 }
 
 export interface Issue {
@@ -42,11 +46,22 @@ export interface ChurnData {
   hotspot_threshold: number;
 }
 
+export interface ComparisonEntry {
+  model: string;
+  ai_debt_score: number;
+  issue_count: number;
+  top_category: string | null;
+  severity_breakdown: Record<string, number>;
+  avg_confidence: number | null;
+  commit_date: string;
+}
+
 export interface AnalysisResult {
   repo_name: string;
   repo_url: string | null;
   commit: { hash: string; short_hash: string; date: string; message: string };
   model: string;
+  provider: Provider | "unknown";
   ai_debt_score: number;
   issue_count: number;
   files_analyzed: number;
@@ -54,9 +69,11 @@ export interface AnalysisResult {
   category_breakdown: Record<string, number>;
   severity_breakdown: Record<string, number>;
   issues: Issue[];
+  avg_confidence: number | null;
   duplicates_removed: number;
   churn_data: ChurnData | null;
   commits_analyzed: number;
+  comparison: Record<string, ComparisonEntry> | null;
 }
 
 export interface HistoryPoint {
@@ -69,11 +86,12 @@ export interface HistoryPoint {
 export async function startAnalysis(
   repoUrl: string,
   mode: "latest" | "history" = "latest",
+  provider: Provider = "gemini",
 ): Promise<{ job_id: string }> {
   const res = await fetch(`${API_URL}/api/analyse`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ repo_url: repoUrl, mode }),
+    body: JSON.stringify({ repo_url: repoUrl, mode, provider }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);

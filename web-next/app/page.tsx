@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Bug, FolderGit2, Flame, Gauge, Sparkles, SquareCode } from "lucide-react";
+import { ArrowRight, Bot, Bug, FolderGit2, Flame, Gauge, Sparkles, SquareCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,20 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { DebtBarChart } from "@/components/dashboard/debt-bar-chart";
+import { ModelBadge } from "@/components/dashboard/model-badge";
 import { cn } from "@/lib/utils";
 import { scoreBand, SCORE_BAND_META } from "@/lib/severity";
-import { getRepos, startAnalysis, type RepoSummary } from "@/lib/api";
+import { PROVIDER_META } from "@/lib/provider";
+import { getRepos, startAnalysis, type Provider, type RepoSummary } from "@/lib/api";
 
 function RiskSpotlight({ repo }: { repo: RepoSummary }) {
   const meta = SCORE_BAND_META[scoreBand(repo.latest_score)];
@@ -41,6 +50,7 @@ function RiskSpotlight({ repo }: { repo: RepoSummary }) {
 export default function Home() {
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const [provider, setProvider] = useState<Provider>("gemini");
   const [includeHistory, setIncludeHistory] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +69,11 @@ export default function Home() {
     const totalIssues = repos.reduce((s, r) => s + r.issue_count, 0);
     const avgScore = Math.round(repos.reduce((s, r) => s + r.latest_score, 0) / repos.length);
     const riskiest = [...repos].sort((a, b) => b.latest_score - a.latest_score)[0];
-    return { totalIssues, avgScore, riskiest };
+    const byProvider = repos.reduce<Record<string, number>>((acc, r) => {
+      acc[r.provider] = (acc[r.provider] ?? 0) + 1;
+      return acc;
+    }, {});
+    return { totalIssues, avgScore, riskiest, byProvider };
   }, [repos]);
 
   const maxScore = useMemo(
@@ -73,7 +87,7 @@ export default function Home() {
     setSubmitting(true);
     setError(null);
     try {
-      const { job_id } = await startAnalysis(url.trim(), includeHistory ? "history" : "latest");
+      const { job_id } = await startAnalysis(url.trim(), includeHistory ? "history" : "latest", provider);
       router.push(`/analyse/${job_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -93,7 +107,7 @@ export default function Home() {
               className="mb-3 gap-1.5 border-border/80 bg-secondary/40 px-2.5 py-0.5 text-muted-foreground"
             >
               <Sparkles className="size-3 text-blue-400" />
-              Powered by Gemini AI
+              Powered by Gemini &amp; Claude
             </Badge>
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Overview</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -118,7 +132,7 @@ export default function Home() {
                 </Button>
               </form>
             </Card>
-            <div className="mt-2 flex items-center justify-between gap-2 px-1">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1">
               <div className="flex items-center gap-2">
                 <Switch
                   id="history-mode"
@@ -130,7 +144,19 @@ export default function Home() {
                   Include commit history
                 </Label>
               </div>
-              <span className="text-xs text-muted-foreground/60">Public repos only</span>
+              <div className="flex items-center gap-2">
+                <Select value={provider} onValueChange={(v) => setProvider((v ?? "gemini") as Provider)}>
+                  <SelectTrigger size="sm" className="h-6 gap-1 text-xs">
+                    <Bot className="size-3 text-muted-foreground" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini">Gemini</SelectItem>
+                    <SelectItem value="claude">Claude</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-muted-foreground/60">Public repos only</span>
+              </div>
             </div>
             {error && <p className="mt-1.5 px-1 text-xs text-red-400">{error}</p>}
           </div>
@@ -146,13 +172,21 @@ export default function Home() {
 
         {reposLoaded && repos.length > 0 && stats && (
           <>
-            <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
               <StatCard label="Repositories" value={repos.length} icon={FolderGit2} />
               <StatCard label="Total issues" value={stats.totalIssues} icon={Bug} />
               <StatCard
                 label="Avg debt score"
                 value={`${stats.avgScore.toLocaleString()} min`}
                 icon={Gauge}
+              />
+              <StatCard
+                label="Models used"
+                value={Object.keys(stats.byProvider).length}
+                icon={Bot}
+                hint={Object.entries(stats.byProvider)
+                  .map(([p, n]) => `${PROVIDER_META[p as keyof typeof PROVIDER_META]?.label ?? p} ${n}`)
+                  .join(" · ")}
               />
               <RiskSpotlight repo={stats.riskiest} />
             </div>
@@ -207,7 +241,10 @@ export default function Home() {
                             <span className="font-normal opacity-70">min</span>
                           </Badge>
                         </div>
-                        <p className="mt-1 truncate text-xs text-muted-foreground">
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <ModelBadge model={r.model} provider={r.provider} className="h-4 px-1.5 text-[10px]" />
+                        </div>
+                        <p className="mt-1.5 truncate text-xs text-muted-foreground">
                           {r.issue_count} issues · last analysed {r.last_analysed}
                         </p>
                         <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-secondary/60">
@@ -229,7 +266,7 @@ export default function Home() {
       </main>
 
       <footer className="relative z-10 border-t border-border/60 py-8 text-center text-xs text-muted-foreground">
-        TD Agent · Built for MSc research at Leeds Beckett University · Powered by Gemini AI
+        TD Agent · Built for MSc research at Leeds Beckett University · Powered by Gemini &amp; Claude
       </footer>
     </div>
   );

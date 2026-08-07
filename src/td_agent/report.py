@@ -27,6 +27,27 @@ _FIELDNAMES = [
 ]
 
 
+_CONFIDENCE_SCORES = {"low": 1, "medium": 2, "high": 3}
+
+
+def provider_from_model(model: str) -> str:
+    """Infer the provider name from a model string (e.g. 'gemini-2.5-flash-lite' -> 'gemini')."""
+    m = (model or "").lower()
+    if m.startswith("claude"):
+        return "claude"
+    if m.startswith("gemini"):
+        return "gemini"
+    return "unknown"
+
+
+def average_confidence(issues: List[Dict]) -> Optional[float]:
+    """Mean confidence across issues on a low=1/medium=2/high=3 scale, or None if no issues."""
+    scores = [_CONFIDENCE_SCORES[i["confidence"]] for i in issues if i.get("confidence") in _CONFIDENCE_SCORES]
+    if not scores:
+        return None
+    return round(sum(scores) / len(scores), 2)
+
+
 def _data_dir(override: Optional[Path]) -> Path:
     base = override or _DATA_DIR
     base.mkdir(parents=True, exist_ok=True)
@@ -49,12 +70,14 @@ def save_results(
     """
     path = get_csv_path(repo_name, data_dir)
 
-    # Collect hashes of commits that already have a *successful* row so we
-    # never overwrite good data and never double-write.
+    # Collect (commit_hash, model) pairs that already have a *successful* row
+    # so we never overwrite good data and never double-write — keyed by model
+    # (not just commit_hash) so re-analysing the same commit with a different
+    # provider adds a new row instead of being silently dropped.
     existing_ok: set = set()
     if path.exists():
         with open(path, newline="", encoding="utf-8") as f:
-            existing_ok = {row["commit_hash"] for row in csv.DictReader(f)}
+            existing_ok = {(row["commit_hash"], row["model"]) for row in csv.DictReader(f)}
 
     mode = "a" if path.exists() else "w"
     with open(path, mode, newline="", encoding="utf-8") as f:
@@ -64,7 +87,7 @@ def save_results(
         for r in results:
             if r.analysis_error:
                 continue                      # skip failed analyses entirely
-            if r.commit.hash in existing_ok:
+            if (r.commit.hash, r.model) in existing_ok:
                 continue                      # already stored
             writer.writerow({
                 "commit_hash":        r.commit.hash,

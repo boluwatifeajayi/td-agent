@@ -9,12 +9,13 @@ import { Progress } from "@/components/ui/progress";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getJob, type JobStatus } from "@/lib/api";
+import { PROVIDER_META } from "@/lib/provider";
 
 const STEPS = [
   { key: "cloning", label: "Cloning repository" },
   { key: "churn", label: "Mapping churn" },
   { key: "selecting", label: "Selecting files" },
-  { key: "analysing", label: "Analysing with Gemini" },
+  { key: "analysing", label: "Analysing" },
   { key: "done", label: "Done" },
 ] as const;
 
@@ -72,11 +73,12 @@ export default function ProgressPage() {
   const stage = job?.progress.stage ?? "queued";
   const activeIdx = job?.status === "done" ? STEPS.length : stepIndex(stage);
   const failed = job?.status === "failed";
+  const providerLabel = PROVIDER_META[job?.provider ?? "gemini"].label;
   const isHistoryAnalysing =
     job?.mode === "history" && stage === "analysing" && job.progress.total > 1;
   const analysingLabel = isHistoryAnalysing
-    ? `Analysing commit ${job.progress.current} of ${job.progress.total}`
-    : "Analysing with Gemini";
+    ? `Analysing commit ${job.progress.current} of ${job.progress.total} with ${providerLabel}`
+    : `Analysing with ${providerLabel}`;
 
   const progressPct =
     job?.status === "done"

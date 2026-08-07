@@ -14,12 +14,12 @@ import {
 } from "recharts";
 import {
   ArrowLeft,
+  BadgeCheck,
   Bug,
   Check,
   FileCode2,
   Flame,
   GitCommitHorizontal,
-  Link2,
   RotateCw,
   Share2,
 } from "lucide-react";
@@ -34,7 +34,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { ModelBadge } from "@/components/dashboard/model-badge";
+import { ProviderComparison } from "@/components/dashboard/provider-comparison";
+import { GroupedIssues } from "@/components/dashboard/grouped-issues";
 import { cn } from "@/lib/utils";
+import { confidenceLabel } from "@/lib/confidence";
 import {
   getHistory,
   getResult,
@@ -44,19 +48,6 @@ import {
   type HistoryPoint,
   type SonarPoint,
 } from "@/lib/api";
-
-const SEVERITY_BADGE: Record<string, string> = {
-  critical: "bg-red-500/15 text-red-400",
-  high: "bg-orange-500/15 text-orange-400",
-  medium: "bg-yellow-500/15 text-yellow-400",
-  low: "bg-emerald-500/15 text-emerald-400",
-};
-
-const CONFIDENCE_BADGE: Record<string, string> = {
-  high: "bg-emerald-500/15 text-emerald-400",
-  medium: "bg-yellow-500/15 text-yellow-400",
-  low: "bg-red-500/15 text-red-400",
-};
 
 const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
 const CHART_GRID = "oklch(1 0 0 / 8%)";
@@ -191,7 +182,7 @@ export default function ResultsPage() {
               <span>·</span>
               <span>{result.commit.date.slice(0, 10)}</span>
               <span>·</span>
-              <span>{result.model}</span>
+              <ModelBadge model={result.model} provider={result.provider} className="h-4 px-1.5 text-[10px]" />
               {result.duplicates_removed > 0 && (
                 <>
                   <span>·</span>
@@ -221,9 +212,20 @@ export default function ResultsPage() {
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="AI debt score" value={`${result.ai_debt_score.toLocaleString()} min`} icon={Flame} />
+        <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <StatCard
+            label="AI debt score"
+            value={`${result.ai_debt_score.toLocaleString()} min`}
+            icon={Flame}
+            badge={<ModelBadge model={result.model} provider={result.provider} className="h-4 px-1.5 text-[10px]" />}
+          />
           <StatCard label="Issues found" value={result.issue_count} icon={Bug} />
+          <StatCard
+            label="Avg. confidence"
+            value={confidenceLabel(result.avg_confidence)}
+            icon={BadgeCheck}
+            hint={result.avg_confidence !== null ? `${result.avg_confidence.toFixed(1)} / 3` : undefined}
+          />
           <StatCard label="Churn hotspots" value={hotspots.length} icon={GitCommitHorizontal} />
           <StatCard label="Files scanned" value={result.files_analyzed} icon={FileCode2} />
         </div>
@@ -236,6 +238,8 @@ export default function ResultsPage() {
             <p className="mt-2 leading-relaxed text-foreground/90">{result.summary}</p>
           </Card>
         )}
+
+        {result.comparison && <ProviderComparison comparison={result.comparison} />}
 
         <section className="mt-10">
           <div className="flex items-center justify-between">
@@ -440,49 +444,8 @@ export default function ResultsPage() {
             </div>
           </div>
 
-          <div className="mt-4 space-y-3">
-            {filteredIssues.map((issue, idx) => (
-              <Card key={idx} className="p-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary" className="capitalize">
-                    {issue.category.replace(/_/g, " ")}
-                  </Badge>
-                  <Badge className={cn("capitalize", SEVERITY_BADGE[issue.severity] ?? "bg-secondary")}>
-                    {issue.severity}
-                  </Badge>
-                  {issue.confidence && (
-                    <Badge className={CONFIDENCE_BADGE[issue.confidence] ?? "bg-secondary"}>
-                      {issue.confidence} confidence
-                    </Badge>
-                  )}
-                  <span className="ml-auto text-xs font-semibold text-muted-foreground">
-                    ~{issue.remediation_minutes} min to fix
-                  </span>
-                </div>
-                {issue.location && (
-                  <p className="mt-3 flex items-center gap-1 font-mono text-xs text-muted-foreground">
-                    <Link2 className="size-3" />
-                    {issue.location}
-                  </p>
-                )}
-                <p className="mt-2 text-sm leading-relaxed">{issue.description}</p>
-                {issue.why_debt && (
-                  <p className="mt-2 text-sm italic leading-relaxed text-muted-foreground">
-                    {issue.why_debt}
-                  </p>
-                )}
-                {issue.suggestion && (
-                  <p className="mt-2 text-sm leading-relaxed text-blue-400">
-                    → {issue.suggestion}
-                  </p>
-                )}
-              </Card>
-            ))}
-            {filteredIssues.length === 0 && (
-              <Card className="border-dashed p-6 text-center text-sm text-muted-foreground">
-                No issues match the current filters.
-              </Card>
-            )}
+          <div className="mt-4">
+            <GroupedIssues issues={filteredIssues} />
           </div>
         </section>
       </main>
