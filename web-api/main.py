@@ -29,6 +29,8 @@ from td_agent.report import (  # noqa: E402
     average_confidence,
     list_analyzed_repos,
     load_results,
+    select_latest,
+    latest_by_provider,
     provider_from_model,
     save_results,
 )
@@ -210,15 +212,14 @@ def results(repo_name: str):
     rows = load_results(repo_name, DATA_DIR)
     if not rows:
         raise HTTPException(status_code=404, detail=f"No results for '{repo_name}'")
-    latest = rows[-1]  # load_results sorts oldest → newest
+    latest = select_latest(rows)
     meta = _load_json(_meta_path(repo_name)) or {}
 
-    # Latest row per provider (rows are oldest→newest, so the last write per
-    # provider wins) — powers the Gemini-vs-Claude comparison card when both
-    # have analysed this repo.
-    by_provider: Dict[str, dict] = {}
-    for r in rows:
-        by_provider[provider_from_model(r.get("model", ""))] = r
+    # Best row per provider, powering the Gemini-vs-Claude comparison card when
+    # both have analysed this repo. This previously kept whichever row was
+    # written last for each provider, which on train-ticket meant a superseded
+    # model's result was compared instead of the authoritative one.
+    by_provider: Dict[str, dict] = latest_by_provider(rows, provider_from_model)
     comparison = (
         {p: _comparison_entry(r) for p, r in by_provider.items()}
         if len(by_provider) > 1
@@ -318,7 +319,7 @@ def repos():
         rows = load_results(name, DATA_DIR)
         if not rows:
             continue
-        latest = rows[-1]
+        latest = select_latest(rows)
         out.append({
             "name": name,
             "latest_score": latest["ai_debt_score"],

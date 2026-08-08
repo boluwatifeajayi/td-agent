@@ -141,6 +141,41 @@ def load_results(repo_name: str, data_dir: Optional[Path] = None) -> List[Dict]:
     return rows
 
 
+def select_latest(rows: List[Dict]) -> Optional[Dict]:
+    """Pick the row that best represents a repository's current state.
+
+    Sorting by commit_date alone is not enough. A single commit can carry more
+    than one analysis: the same provider may have analysed it twice under
+    different model strings, and both providers may have analysed it. Because
+    Python's sort is stable, taking rows[-1] then returns whichever row happens
+    to sit last in the file, which is arbitrary. On train-ticket that surfaced a
+    superseded gemini-flash-lite-latest result of 150 minutes in place of the
+    authoritative gemini-2.5-flash-lite result of 280.
+
+    The rule applied here is the most recent analysis first, and where several
+    share the same commit date, the most complete one. Completeness is measured
+    by issue count and then by how many issues carry full per-issue detail,
+    since a recovered aggregate row reports a count but holds only a placeholder
+    entry.
+    """
+    if not rows:
+        return None
+    newest = max(r.get("commit_date", "")[:10] for r in rows)
+    same_day = [r for r in rows if r.get("commit_date", "")[:10] == newest]
+    return max(
+        same_day,
+        key=lambda r: (r.get("issue_count", 0), len(r.get("issues") or [])),
+    )
+
+
+def latest_by_provider(rows: List[Dict], provider_of) -> Dict[str, Dict]:
+    """Best row per provider, using the same rule as select_latest."""
+    grouped: Dict[str, List[Dict]] = {}
+    for r in rows:
+        grouped.setdefault(provider_of(r.get("model", "")), []).append(r)
+    return {p: select_latest(rs) for p, rs in grouped.items()}
+
+
 def list_analyzed_repos(data_dir: Optional[Path] = None) -> List[str]:
     """Return names of repos that have result CSV files."""
     base = _data_dir(data_dir)
