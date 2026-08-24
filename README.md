@@ -1,15 +1,15 @@
 # TD Agent
 
-![Tests](https://github.com/boluaj16/td-agent/actions/workflows/tests.yml/badge.svg)
+![Tests](https://github.com/boluwatifeajayi/td-agent/actions/workflows/tests.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Free tier](https://img.shields.io/badge/Gemini%20API-free%20tier-orange)
 
 **AI-powered technical debt detection that speaks the same language as SonarQube.**
 
-TD Agent analyses a git repository's commit history by sending source-code snapshots to Google Gemini and asking it to identify technical debt. Every issue gets a realistic remediation estimate in minutes, which are summed into an **AI Technical Debt Score** — the same unit SonarQube uses for its [SQALE index](https://docs.sonarsource.com/sonarqube/latest/user-guide/metric-definitions/). This makes the two tools directly comparable, and is the core empirical contribution of an MSc Computer Science dissertation investigating whether LLM-based analysis can surface debt that static analysis misses.
+TD Agent analyses a git repository's commit history by sending source-code snapshots to Google Gemini and asking it to identify technical debt. Every issue gets a realistic remediation estimate in minutes, which are summed into an **AI Technical Debt Score** — the same unit SonarQube uses for its [SQALE index](https://docs.sonarsource.com/sonarqube/latest/user-guide/metric-definitions/). This makes the two tools directly comparable, and is the core empirical contribution of an MSc Software Engineering dissertation investigating whether LLM-based analysis can surface debt that static analysis misses.
 
-> **Dissertation context** — this tool was built as part of an MSc project at [University], comparing AI-detected technical debt against SonarQube across real open-source microservice repositories. The initial results show the AI score is ~73% higher than the SonarQube SQALE index on the same codebase (piggymetrics: AI 2,130 min vs SonarQube 1,229 min), suggesting the LLM captures architectural and cross-cutting concerns that pattern-matching rules cannot.
+> **Dissertation context** — this tool was built as part of an MSc Software Engineering project at Leeds Beckett University, comparing AI-detected technical debt against SonarQube across real open-source microservice repositories. The initial results show the AI score is ~73% higher than the SonarQube SQALE index on the same codebase (piggymetrics: AI 2,130 min vs SonarQube 1,229 min), suggesting the LLM captures architectural and cross-cutting concerns that pattern-matching rules cannot.
 
 ---
 
@@ -57,7 +57,7 @@ Enough to analyse ~1,500 commits per day at zero cost.
 ## Installation
 
 ```bash
-git clone https://github.com/boluaj16/td-agent
+git clone https://github.com/boluwatifeajayi/td-agent
 cd td-agent
 
 # Create and activate a virtual environment
