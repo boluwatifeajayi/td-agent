@@ -11,7 +11,10 @@ from .base import LLMProvider
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "claude-sonnet-4-5"
+# Pinned to the dated snapshot rather than the "claude-sonnet-4-5" alias, which
+# the API no longer offers. Same model the comparison in Chapter 4 was run
+# against, and pinning it keeps that comparison reproducible.
+DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
 
 _TOOL_NAME = "submit_technical_debt_analysis"
 _MAX_TOKENS = 8192
